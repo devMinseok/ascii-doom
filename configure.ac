@@ -289,6 +289,8 @@ AC_DEFUN([AC_DATAROOTDIR_CHECKED])
 AS_IF([test "x$enable_emscripten" = "xyes"],
   EXEEXT=".html"
 )
+AC_SUBST([enable_emscripten])
+AM_CONDITIONAL([ENABLE_EMSCRIPTEN], [test "x$enable_emscripten" = "xyes"])
 
 AC_CONFIG_FILES([
 Makefile
