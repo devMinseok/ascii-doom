@@ -65,3 +65,10 @@ GTAGS
 # clangd settings
 /.cache/clangd
 compile_commands.json
+
+# Emscripten build outputs
+*.wasm
+# Ignore built JS files, but keep source JS files like index.html
+src/chocolate-*.js
+opl/examples/droplay.js
+textscreen/examples/*.js
