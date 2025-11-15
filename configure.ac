@@ -299,7 +299,6 @@ man/bash-completion/heretic.template
 man/bash-completion/hexen.template
 man/bash-completion/strife.template
 opl/Makefile
-opl/examples/Makefile
 pcsound/Makefile
 pkg/Makefile
 pkg/config.make
@@ -329,7 +328,6 @@ src/Strife.metainfo.xml
 src/Strife.desktop
 src/strife/Makefile
 textscreen/Makefile
-textscreen/examples/Makefile
 textscreen/fonts/Makefile
 ])
 AC_OUTPUT

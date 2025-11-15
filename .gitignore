@@ -70,5 +70,3 @@ compile_commands.json
 *.wasm
 # Ignore built JS files, but keep source JS files like index.html
 src/chocolate-*.js
-opl/examples/droplay.js
-textscreen/examples/*.js

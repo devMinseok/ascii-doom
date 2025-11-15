@@ -44,4 +44,3 @@ Open `http://localhost:8000/chocolate-doom.html` in your browser.
 - **Build fails with "No rule to make target"**: Run `autoreconf -fiv` first
 - **Icon file errors** (`doom.png`, `hexen.png`, etc.): These are optional - ignore them. Use `-k` flag to continue building despite errors
 - **wasm-ld error**: `emmake make clean && emmake make -k`
-- **Textscreen examples fail**: Expected - main games build successfully
