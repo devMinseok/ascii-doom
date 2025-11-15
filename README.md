@@ -39,6 +39,35 @@ Open `http://localhost:8000/chocolate-doom.html` in your browser.
 
 **Note**: You need a WAD file (e.g., `doom1.wad`, `doom2.wad`) to play. Modify `index.html`'s `preRun` section to preload your WAD file.
 
+## Deploy to GitHub Pages
+
+This project includes a GitHub Actions workflow that automatically builds and deploys to GitHub Pages.
+
+### Setup
+
+1. **Enable GitHub Pages** in your repository settings:
+   - Go to Settings → Pages
+   - Source: Select "GitHub Actions"
+
+2. **Push to main/master branch** - The workflow will automatically:
+   - Build the project with Emscripten
+   - Deploy to GitHub Pages
+   - Your site will be available at `https://<username>.github.io/ascii-doom/`
+
+### Manual Deployment
+
+If you want to deploy manually:
+
+```bash
+# Build the project
+autoreconf -fiv
+emconfigure ./configure --enable-emscripten
+emmake make -j4 -k
+
+# Copy files to docs/ directory (if using docs/ folder for Pages)
+# Or push src/ directory contents to gh-pages branch
+```
+
 ## Troubleshooting
 
 - **Build fails with "No rule to make target"**: Run `autoreconf -fiv` first
