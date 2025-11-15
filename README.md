@@ -17,9 +17,11 @@ autoreconf -fiv
 # Configure with Emscripten
 emconfigure ./configure --enable-emscripten
 
-# Build
-emmake make -j4
+# Build (ignore icon file errors - games will build successfully)
+emmake make -j4 -k
 ```
+
+**Note**: You may see errors about missing icon files (`doom.png`, `hexen.png`, etc.) in the `data/` directory. These are optional and can be ignored - the game files will build successfully.
 
 Output files in `src/`:
 - `chocolate-doom.html`, `chocolate-heretic.html`, `chocolate-hexen.html`, `chocolate-strife.html`
@@ -39,6 +41,7 @@ Open `http://localhost:8000/chocolate-doom.html` in your browser.
 
 ## Troubleshooting
 
-- Build fails: Run `autoreconf -fiv` first
-- wasm-ld error: `emmake make clean && emmake make`
-- Textscreen examples fail: Expected - main games build successfully
+- **Build fails with "No rule to make target"**: Run `autoreconf -fiv` first
+- **Icon file errors** (`doom.png`, `hexen.png`, etc.): These are optional - ignore them. Use `-k` flag to continue building despite errors
+- **wasm-ld error**: `emmake make clean && emmake make -k`
+- **Textscreen examples fail**: Expected - main games build successfully
