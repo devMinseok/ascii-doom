@@ -33,8 +33,8 @@
 
 // New buffer for HTML output. Size is estimated for worst-case scenario:
 // ASCII_WIDTH * ASCII_HEIGHT * (sizeof(<span>...</span>) + safety margin)
-// Approx: 120 * 40 * 50 = 240,000. Let's use 250,000.
-#define HTML_BUFFER_SIZE 250000
+// Approx: 240 * 80 * 50 = 960,000. Let's use 1,000,000.
+#define HTML_BUFFER_SIZE 1000000
 static char html_buffer[HTML_BUFFER_SIZE];
 static boolean ascii_initialized = false;
 

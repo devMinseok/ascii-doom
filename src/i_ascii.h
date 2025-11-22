@@ -28,8 +28,8 @@ extern "C" {
 #endif
 
 // ASCII output dimensions (can be configured)
-#define ASCII_WIDTH  120
-#define ASCII_HEIGHT 40
+#define ASCII_WIDTH  240
+#define ASCII_HEIGHT 80
 
 // Convert RGBA buffer to ASCII string
 // Input: rgba_buffer - pointer to ARGB8888 pixel data (width x height x 4 bytes)
