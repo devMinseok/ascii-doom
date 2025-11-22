@@ -39,7 +39,7 @@ source /opt/emsdk/emsdk_env.sh\n\
 echo "Generating configure script..."\n\
 autoreconf -fiv\n\
 echo "Configuring with Emscripten..."\n\
-emconfigure ./configure --enable-emscripten\n\
+emconfigure ./configure --enable-emscripten --disable-doc\n\
 echo "Building..."\n\
 emmake make -j$(nproc) -k\n\
 echo "Build complete! Output files are in src/ directory."' > /usr/local/bin/build.sh && \
