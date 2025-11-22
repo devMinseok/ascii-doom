@@ -154,10 +154,9 @@
                             if (asciiGetBuffer) {
                                 try {
                                     var asciiStr = asciiGetBuffer();
-                                    if (asciiStr) {
-                                        asciiOutput.textContent = asciiStr;
-                                    }
-                                } catch (e) {
+                                                                         if (asciiStr) {
+                                                                            asciiOutput.innerHTML = asciiStr;
+                                                                        }                                } catch (e) {
                                     console.error("Error getting ASCII buffer:", e);
                                     console.error("Stack:", e.stack);
                                 }

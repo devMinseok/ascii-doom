@@ -20,17 +20,22 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
 #include <algorithm>
 #include <string>
+#include <vector>
 #include <emscripten.h>
 #include "i_ascii.h"
 #include "i_video.h"
 
-// Static buffer for ASCII output (includes newlines: (width + 1) * height + 1)
-static char ascii_buffer[(ASCII_WIDTH + 1) * ASCII_HEIGHT + 1];
+// New buffer for HTML output. Size is estimated for worst-case scenario:
+// ASCII_WIDTH * ASCII_HEIGHT * (sizeof(<span>...</span>) + safety margin)
+// Approx: 120 * 40 * 50 = 240,000. Let's use 250,000.
+#define HTML_BUFFER_SIZE 250000
+static char html_buffer[HTML_BUFFER_SIZE];
 static boolean ascii_initialized = false;
 
 extern "C" {
@@ -40,7 +45,7 @@ void I_InitASCII(void)
     if (ascii_initialized)
         return;
     
-    std::memset(ascii_buffer, 0, sizeof(ascii_buffer));
+    html_buffer[0] = '\0';
     ascii_initialized = true;
 }
 
@@ -54,31 +59,34 @@ void I_ShutdownASCII(void)
 
 const char* I_GetASCIIBuffer(void)
 {
-    return ascii_buffer;
+    return html_buffer;
 }
 
-// C++ implementation of ASCII conversion (called from C code)
+// C++ implementation of RGBA to colored HTML ASCII conversion
 extern "C" void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer, 
                                      int src_width, int src_height,
-                                     char *ascii_buffer,
+                                     char *output_buffer, // This will be our html_buffer
                                      int ascii_width, int ascii_height)
 {
     const std::string ascii_chars = " .:-=+*#%@";
-    
+    char* buffer_ptr = output_buffer;
+    int remaining_size = HTML_BUFFER_SIZE;
+
     for (int y = 0; y < ascii_height; ++y) {
         for (int x = 0; x < ascii_width; ++x) {
             // Calculate source region
-            int src_x = (x * src_width) / ascii_width;
-            int src_y = (y * src_height) / ascii_height;
+            int src_x_start = (x * src_width) / ascii_width;
+            int src_y_start = (y * src_height) / ascii_height;
             int src_x_end = ((x + 1) * src_width) / ascii_width;
             int src_y_end = ((y + 1) * src_height) / ascii_height;
             
-            // Average brightness in region
-            int total_r = 0, total_g = 0, total_b = 0;
+            // Average color and brightness in region
+            long long total_r = 0, total_g = 0, total_b = 0;
             int count = 0;
-            for (int sy = src_y; sy < src_y_end; ++sy) {
-                for (int sx = src_x; sx < src_x_end; ++sx) {
+            for (int sy = src_y_start; sy < src_y_end; ++sy) {
+                for (int sx = src_x_start; sx < src_x_end; ++sx) {
                     uint32_t pixel = rgba_buffer[sy * src_width + sx];
+                    // Assuming RGBA8888, where alpha is the highest byte
                     total_r += (pixel >> 16) & 0xFF;
                     total_g += (pixel >> 8) & 0xFF;
                     total_b += pixel & 0xFF;
@@ -86,11 +94,7 @@ extern "C" void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                 }
             }
             
-            // Avoid division by zero
-            if (count == 0) {
-                ascii_buffer[y * (ascii_width + 1) + x] = ' ';
-                continue;
-            }
+            if (count == 0) continue;
             
             int avg_r = total_r / count;
             int avg_g = total_g / count;
@@ -100,19 +104,38 @@ extern "C" void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
             int brightness = (avg_r * 299 + avg_g * 587 + avg_b * 114) / 1000;
             
             // Map to ASCII character
-            int char_count = static_cast<int>(ascii_chars.length());
-            int char_idx = (brightness * (char_count - 1)) / 255;
-            ascii_buffer[y * (ascii_width + 1) + x] = ascii_chars[char_idx];
+            int char_idx = (brightness * (ascii_chars.length() - 1)) / 255;
+            char ascii_char = ascii_chars[char_idx];
+            
+            // Prevent special HTML characters from breaking the output
+            char final_char = ascii_char;
+            if (ascii_char == '<') final_char = '&lt;';
+            if (ascii_char == '>') final_char = '&gt;';
+            if (ascii_char == '&') final_char = '&amp;';
+
+            // Write colored HTML span to buffer
+            int written = snprintf(buffer_ptr, remaining_size,
+                                   "<span style=\"color:rgb(%d,%d,%d);\">%c</span>",
+                                   avg_r, avg_g, avg_b, final_char);
+            
+            if (written > 0) {
+                buffer_ptr += written;
+                remaining_size -= written;
+            }
         }
-        ascii_buffer[y * (ascii_width + 1) + ascii_width] = '\n';
+        // Add line break
+        int written = snprintf(buffer_ptr, remaining_size, "<br/>");
+        if (written > 0) {
+            buffer_ptr += written;
+            remaining_size -= written;
+        }
     }
-    ascii_buffer[ascii_height * (ascii_width + 1)] = '\0';
+    *buffer_ptr = '\0'; // Null-terminate the string
 }
 
 } // extern "C"
 
 // Emscripten export: Get ASCII buffer pointer
-// Must be outside extern "C" block for EMSCRIPTEN_KEEPALIVE to work properly
 extern "C" {
 EMSCRIPTEN_KEEPALIVE
 const char* ascii_get_buffer(void)
@@ -124,7 +147,7 @@ const char* ascii_get_buffer(void)
 EMSCRIPTEN_KEEPALIVE
 int ascii_get_buffer_size(void)
 {
-    return (ASCII_WIDTH + 1) * ASCII_HEIGHT + 1;
+    return HTML_BUFFER_SIZE;
 }
 } // extern "C"
 
