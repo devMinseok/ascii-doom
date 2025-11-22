@@ -46,18 +46,125 @@
                 width: 800px;
                 height: 600px;
             }
+
+            #ascii-output {
+                font-family: "Courier New", monospace;
+                font-size: 8px;
+                line-height: 1;
+                color: #0f0;
+                background-color: #000;
+                padding: 10px;
+                white-space: pre;
+                overflow: hidden;
+                display: none; /* Initially hidden, show when ASCII mode is enabled */
+            }
         </style>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
     </head>
     <body>
         <div id="container" class="noselect">
             <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+            <pre id="ascii-output"></pre>
         </div>
         <script>
             var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare"];
 
+            // ASCII rendering variables
+            var asciiOutput = document.getElementById("ascii-output");
+            var asciiGetBuffer = null;
+            var asciiUpdateInterval = null;
+            var asciiEnabled = true; // Set to false to disable ASCII rendering
+
             var Module = {
                 onRuntimeInitialized: () => {
+                    console.log("Module initialized, checking for ascii_get_buffer...");
+                    
+                    // Try multiple methods to get the function
+                    var getASCIIBuffer = null;
+                    
+                    // Method 1: Try cwrap
+                    try {
+                        getASCIIBuffer = Module.cwrap('ascii_get_buffer', 'string', []);
+                        if (getASCIIBuffer) {
+                            console.log("ascii_get_buffer wrapped with cwrap (string)");
+                        }
+                    } catch (e) {
+                        console.log("cwrap (string) failed:", e);
+                    }
+                    
+                    // Method 2: Try cwrap with number return type
+                    if (!getASCIIBuffer) {
+                        try {
+                            var getPtr = Module.cwrap('ascii_get_buffer', 'number', []);
+                            if (getPtr) {
+                                getASCIIBuffer = function() {
+                                    var ptr = getPtr();
+                                    return ptr ? Module.UTF8ToString(ptr) : '';
+                                };
+                                console.log("ascii_get_buffer wrapped with cwrap (number)");
+                            }
+                        } catch (e) {
+                            console.log("cwrap (number) failed:", e);
+                        }
+                    }
+                    
+                    // Method 3: Try ccall
+                    if (!getASCIIBuffer) {
+                        try {
+                            if (typeof Module._ascii_get_buffer !== 'undefined') {
+                                getASCIIBuffer = function() {
+                                    var ptr = Module.ccall('ascii_get_buffer', 'number', [], []);
+                                    return ptr ? Module.UTF8ToString(ptr) : '';
+                                };
+                                console.log("ascii_get_buffer found via ccall");
+                            }
+                        } catch (e) {
+                            console.log("ccall failed:", e);
+                        }
+                    }
+                    
+                    // Method 4: Check if function exists directly
+                    if (!getASCIIBuffer && typeof Module._ascii_get_buffer !== 'undefined') {
+                        console.log("Found _ascii_get_buffer, trying direct call");
+                        try {
+                            getASCIIBuffer = function() {
+                                var ptr = Module._ascii_get_buffer();
+                                return ptr ? Module.UTF8ToString(ptr) : '';
+                            };
+                        } catch (e) {
+                            console.log("Direct call failed:", e);
+                        }
+                    }
+                    
+                    if (!getASCIIBuffer) {
+                        console.error("Failed to find ascii_get_buffer function");
+                        console.log("Available _ functions:", Object.keys(Module).filter(k => k.startsWith('_') && typeof Module[k] === 'function').slice(0, 30));
+                    } else {
+                        asciiGetBuffer = getASCIIBuffer;
+                        console.log("ASCII buffer function ready");
+                    }
+                    
+                    // Hide canvas and show ASCII output if enabled
+                    if (asciiEnabled) {
+                        document.getElementById("canvas").style.display = "none";
+                        asciiOutput.style.display = "block";
+                        
+                        // Update ASCII output periodically
+                        asciiUpdateInterval = setInterval(() => {
+                            if (asciiGetBuffer) {
+                                try {
+                                    var asciiStr = asciiGetBuffer();
+                                    if (asciiStr) {
+                                        asciiOutput.textContent = asciiStr;
+                                    }
+                                } catch (e) {
+                                    console.error("Error getting ASCII buffer:", e);
+                                    console.error("Stack:", e.stack);
+                                }
+                            }
+                        }, 16); // ~60 FPS
+                    }
+                    
                     callMain(commonArgs);
                 },
                 noInitialRun: true,

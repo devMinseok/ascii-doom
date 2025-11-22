@@ -48,6 +48,10 @@
 #include "w_wad.h"
 #include "z_zone.h"
 
+#ifdef __EMSCRIPTEN__
+#include "i_ascii.h"
+#endif
+
 // These are (1) the window (or the full screen) that our game is rendered to
 // and (2) the renderer that scales the texture (see below) into this window.
 
@@ -275,6 +279,11 @@ void I_ShutdownGraphics(void)
     if (initialized)
     {
         SetShowCursor(true);
+
+#ifdef __EMSCRIPTEN__
+        // Shutdown ASCII rendering
+        I_ShutdownASCII();
+#endif
 
         SDL_FreeSurface(argbbuffer);
         SDL_FreeSurface(screenbuffer);
@@ -790,6 +799,19 @@ void I_FinishUpdate (void)
     SDL_LockTexture(texture, &blit_rect, &argbbuffer->pixels,
                     &argbbuffer->pitch);
     SDL_LowerBlit(screenbuffer, &blit_rect, argbbuffer, &blit_rect);
+    
+#ifdef __EMSCRIPTEN__
+    // Convert RGBA buffer to ASCII for web display
+    if (argbbuffer != NULL && argbbuffer->pixels != NULL)
+    {
+        char *ascii_buf = (char *)I_GetASCIIBuffer();
+        I_ConvertRGBAtoASCII((const uint32_t *)argbbuffer->pixels,
+                             SCREENWIDTH, SCREENHEIGHT,
+                             ascii_buf,
+                             ASCII_WIDTH, ASCII_HEIGHT);
+    }
+#endif
+    
     SDL_UnlockTexture(texture);
 
     // Make sure the pillarboxes are kept clear each frame.
@@ -1505,6 +1527,11 @@ void I_InitGraphics(void)
     while (SDL_PollEvent(&dummy));
 
     initialized = true;
+
+#ifdef __EMSCRIPTEN__
+    // Initialize ASCII rendering
+    I_InitASCII();
+#endif
 
     // Call I_ShutdownGraphics on quit
 
