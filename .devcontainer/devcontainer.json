@@ -1,0 +1,34 @@
+{
+  "name": "Chocolate Doom (Emscripten)",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "build",
+  "workspaceFolder": "/workspace",
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "ms-python.python"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "files.exclude": {
+          "**/.git": true,
+          "**/.DS_Store": true
+        }
+      }
+    }
+  },
+  
+  "postCreateCommand": "source /opt/emsdk/emsdk_env.sh && echo 'Emscripten environment ready!'",
+  
+  "remoteUser": "root",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  }
+}
+
+
+

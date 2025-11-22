@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+*.o
+*.lo
+*.la
+*.a
+*.so
+*.wasm
+src/chocolate-*.js
+src/chocolate-*.html
+
+# Autotools
+aclocal.m4
+autom4te.cache
+autotools
+Makefile
+Makefile.in
+config.h
+config.hin
+config.log
+config.status
+configure
+lib
+obj
+stamp-h*
+rpm.spec
+
+# IDE
+.vscode
+.vs
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+
+# CI/CD
+.github
+

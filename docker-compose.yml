@@ -1,0 +1,18 @@
+services:
+  build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/workspace
+      - build-cache:/root/.emscripten_cache
+    working_dir: /workspace
+    environment:
+      - EMSDK=/opt/emsdk
+    command: sleep infinity
+    stdin_open: true
+    tty: true
+
+volumes:
+  build-cache:
+
