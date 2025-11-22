@@ -25,7 +25,10 @@
                 background-color: #111;
                 margin: 0;
                 padding: 2ch;
-                /* vietnamese */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
             }
 
             #container {
@@ -40,26 +43,14 @@
                 display: block;
             }
 
-            /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
             canvas.frame {
                 background-color: black;
-                width: 800px;
-                height: 600px;
             }
 
             #ascii-output {
-                font-family: "Courier New", monospace;
-                font-size: 8px;
-                line-height: 1;
-                color: #0f0;
-                background-color: #000;
-                padding: 10px;
-                white-space: pre;
-                overflow: hidden;
-                display: none; /* Initially hidden, show when ASCII mode is enabled */
+                display: none; 
             }
         </style>
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
     </head>
     <body>
         <div id="container" class="noselect">
@@ -69,100 +60,74 @@
         <script>
             var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare"];
 
-            // ASCII rendering variables
-            var asciiOutput = document.getElementById("ascii-output");
-            var asciiGetBuffer = null;
-            var asciiUpdateInterval = null;
-            var asciiEnabled = true; // Set to false to disable ASCII rendering
-
             var Module = {
                 onRuntimeInitialized: () => {
-                    console.log("Module initialized, checking for ascii_get_buffer...");
-                    
-                    // Try multiple methods to get the function
-                    var getASCIIBuffer = null;
-                    
-                    // Method 1: Try cwrap
-                    try {
-                        getASCIIBuffer = Module.cwrap('ascii_get_buffer', 'string', []);
-                        if (getASCIIBuffer) {
-                            console.log("ascii_get_buffer wrapped with cwrap (string)");
-                        }
-                    } catch (e) {
-                        console.log("cwrap (string) failed:", e);
+                    console.log("Module initialized, setting up canvas renderer...");
+
+                    const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
+                    const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
+
+                    if (!getBufferPtr || !getBufferSize) {
+                        console.error("Failed to wrap WASM buffer functions.");
+                        return;
                     }
+
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    const ASCII_WIDTH = 240;
+                    const ASCII_HEIGHT = 80;
+                    const FONT_SIZE = 9;
+                    const FONT = `${FONT_SIZE}px "Courier New", monospace`;
                     
-                    // Method 2: Try cwrap with number return type
-                    if (!getASCIIBuffer) {
+                    // Calculate character cell size
+                    ctx.font = FONT;
+                    const charMeasure = ctx.measureText("M");
+                    const charWidth = charMeasure.width;
+                    const charHeight = FONT_SIZE;
+
+                    canvas.width = ASCII_WIDTH * charWidth;
+                    canvas.height = ASCII_HEIGHT * charHeight;
+                    
+                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
+                    console.log(`Character cell size: ${charWidth}x${charHeight}`);
+
+                    function renderFrame() {
                         try {
-                            var getPtr = Module.cwrap('ascii_get_buffer', 'number', []);
-                            if (getPtr) {
-                                getASCIIBuffer = function() {
-                                    var ptr = getPtr();
-                                    return ptr ? Module.UTF8ToString(ptr) : '';
-                                };
-                                console.log("ascii_get_buffer wrapped with cwrap (number)");
-                            }
-                        } catch (e) {
-                            console.log("cwrap (number) failed:", e);
-                        }
-                    }
-                    
-                    // Method 3: Try ccall
-                    if (!getASCIIBuffer) {
-                        try {
-                            if (typeof Module._ascii_get_buffer !== 'undefined') {
-                                getASCIIBuffer = function() {
-                                    var ptr = Module.ccall('ascii_get_buffer', 'number', [], []);
-                                    return ptr ? Module.UTF8ToString(ptr) : '';
-                                };
-                                console.log("ascii_get_buffer found via ccall");
-                            }
-                        } catch (e) {
-                            console.log("ccall failed:", e);
-                        }
-                    }
-                    
-                    // Method 4: Check if function exists directly
-                    if (!getASCIIBuffer && typeof Module._ascii_get_buffer !== 'undefined') {
-                        console.log("Found _ascii_get_buffer, trying direct call");
-                        try {
-                            getASCIIBuffer = function() {
-                                var ptr = Module._ascii_get_buffer();
-                                return ptr ? Module.UTF8ToString(ptr) : '';
-                            };
-                        } catch (e) {
-                            console.log("Direct call failed:", e);
-                        }
-                    }
-                    
-                    if (!getASCIIBuffer) {
-                        console.error("Failed to find ascii_get_buffer function");
-                        console.log("Available _ functions:", Object.keys(Module).filter(k => k.startsWith('_') && typeof Module[k] === 'function').slice(0, 30));
-                    } else {
-                        asciiGetBuffer = getASCIIBuffer;
-                        console.log("ASCII buffer function ready");
-                    }
-                    
-                    // Hide canvas and show ASCII output if enabled
-                    if (asciiEnabled) {
-                        document.getElementById("canvas").style.display = "none";
-                        asciiOutput.style.display = "block";
-                        
-                        // Update ASCII output periodically
-                        asciiUpdateInterval = setInterval(() => {
-                            if (asciiGetBuffer) {
-                                try {
-                                    var asciiStr = asciiGetBuffer();
-                                                                         if (asciiStr) {
-                                                                            asciiOutput.innerHTML = asciiStr;
-                                                                        }                                } catch (e) {
-                                    console.error("Error getting ASCII buffer:", e);
-                                    console.error("Stack:", e.stack);
+                            const bufferPtr = getBufferPtr();
+                            const bufferSize = getBufferSize();
+
+                            if (!bufferPtr || !bufferSize) return;
+
+                            const buffer = new Uint8Array(Module.HEAPU8.buffer, bufferPtr, bufferSize);
+                            
+                            ctx.fillStyle = 'black';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.font = FONT;
+
+                            let i = 0;
+                            for (let y = 0; y < ASCII_HEIGHT; y++) {
+                                for (let x = 0; x < ASCII_WIDTH; x++) {
+                                    const charCode = buffer[i];
+                                    const r = buffer[i + 1];
+                                    const g = buffer[i + 2];
+                                    const b = buffer[i + 3];
+
+                                    const char = String.fromCharCode(charCode);
+                                    
+                                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                                    ctx.fillText(char, x * charWidth, y * charHeight + charHeight);
+                                    
+                                    i += 4;
                                 }
                             }
-                        }, 16); // ~60 FPS
+                        } catch (e) {
+                            console.error("Error during canvas rendering:", e);
+                            clearInterval(renderInterval);
+                        }
                     }
+
+                    const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
                     
                     callMain(commonArgs);
                 },
@@ -175,36 +140,17 @@
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
                     console.error(text);
                 },
-                canvas: (function () {
-                    var canvas = document.getElementById("canvas");
-                    canvas.addEventListener(
-                        "webglcontextlost",
-                        function (e) {
-                            alert("WebGL context lost. You will need to reload the page.");
-                            e.preventDefault();
-                        },
-                        false
-                    );
-                    return canvas;
-                })(),
+                canvas: document.getElementById("canvas"),
                 print: function (text) {
                     console.log(text);
                 },
                 setStatus: function (text) {
                     console.log(text);
-                },
-                totalDependencies: 0,
-                monitorRunDependencies: function (left) {
-                    this.totalDependencies = Math.max(this.totalDependencies, left);
-                    Module.setStatus(left ? "Preparing... (" + (this.totalDependencies - left) + "/" + this.totalDependencies + ")" : "All downloads complete.");
-                },
+                }
             };
 
             window.onerror = function (event) {
-                Module.setStatus("Exception thrown, see JavaScript console");
-                Module.setStatus = function (text) {
-                    if (text) Module.printErr("[post-exception status] " + text);
-                };
+                console.error("Unhandled error:", event);
             };
         </script>
         <script async type="text/javascript" src="chocolate-doom.js"></script>
