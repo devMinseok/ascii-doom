@@ -54,82 +54,35 @@
     </head>
     <body>
         <div id="container" class="noselect">
+            <!-- Hidden canvas for SDL (required for initialization) -->
+            <canvas id="sdl-canvas" style="display: none; width: 320px; height: 200px;"></canvas>
+            <!-- Visible canvas for ASCII rendering -->
             <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
             <pre id="ascii-output"></pre>
         </div>
         <script>
-            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare"];
+            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-force_software_renderer", "1"];
 
             var Module = {
                 onRuntimeInitialized: () => {
                     console.log("Module initialized, setting up canvas renderer...");
-
-                    const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
-                    const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
-
-                    if (!getBufferPtr || !getBufferSize) {
-                        console.error("Failed to wrap WASM buffer functions.");
-                        return;
+                    
+                    // Hide SDL canvas and any canvas that Emscripten might have created automatically
+                    const sdlCanvas = document.getElementById("sdl-canvas");
+                    if (sdlCanvas) {
+                        sdlCanvas.style.display = "none";
                     }
-
-                    const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d');
-
-                    const ASCII_WIDTH = 240;
-                    const ASCII_HEIGHT = 80;
-                    const FONT_SIZE = 9;
-                    const FONT = `${FONT_SIZE}px "Courier New", monospace`;
-                    
-                    // Calculate character cell size
-                    ctx.font = FONT;
-                    const charMeasure = ctx.measureText("M");
-                    const charWidth = charMeasure.width;
-                    const charHeight = FONT_SIZE;
-
-                    canvas.width = ASCII_WIDTH * charWidth;
-                    canvas.height = ASCII_HEIGHT * charHeight;
-                    
-                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
-                    console.log(`Character cell size: ${charWidth}x${charHeight}`);
-
-                    function renderFrame() {
-                        try {
-                            const bufferPtr = getBufferPtr();
-                            const bufferSize = getBufferSize();
-
-                            if (!bufferPtr || !bufferSize) return;
-
-                            const buffer = new Uint8Array(Module.HEAPU8.buffer, bufferPtr, bufferSize);
-                            
-                            ctx.fillStyle = 'black';
-                            ctx.fillRect(0, 0, canvas.width, canvas.height);
-                            ctx.font = FONT;
-
-                            let i = 0;
-                            for (let y = 0; y < ASCII_HEIGHT; y++) {
-                                for (let x = 0; x < ASCII_WIDTH; x++) {
-                                    const charCode = buffer[i];
-                                    const r = buffer[i + 1];
-                                    const g = buffer[i + 2];
-                                    const b = buffer[i + 3];
-
-                                    const char = String.fromCharCode(charCode);
-                                    
-                                    ctx.fillStyle = `rgb(${r},${g},${b})`;
-                                    ctx.fillText(char, x * charWidth, y * charHeight + charHeight);
-                                    
-                                    i += 4;
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Error during canvas rendering:", e);
-                            clearInterval(renderInterval);
+                    const canvases = document.querySelectorAll("canvas");
+                    canvases.forEach(canvas => {
+                        if (canvas.id !== "canvas") {
+                            canvas.style.display = "none";
                         }
-                    }
-
-                    const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
+                    });
                     
-                    callMain(commonArgs);
+                    // Wait a bit for HEAPU8 to be fully initialized
+                    setTimeout(() => {
+                        setupRenderer();
+                    }, 100);
                 },
                 noInitialRun: true,
                 preRun: () => {
@@ -140,7 +93,7 @@
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
                     console.error(text);
                 },
-                canvas: document.getElementById("canvas"),
+                canvas: document.getElementById("sdl-canvas"),
                 print: function (text) {
                     console.log(text);
                 },
@@ -148,6 +101,153 @@
                     console.log(text);
                 }
             };
+
+            function setupRenderer() {
+                const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
+                const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
+
+                if (!getBufferPtr || !getBufferSize) {
+                    console.error("Failed to wrap WASM buffer functions.");
+                    return;
+                }
+
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const ASCII_WIDTH = 240;
+                const ASCII_HEIGHT = 80;
+                const FONT_SIZE = 9;
+                const FONT = `${FONT_SIZE}px "Courier New", monospace`;
+                
+                // Calculate character cell size
+                ctx.font = FONT;
+                const charMeasure = ctx.measureText("M");
+                const charWidth = charMeasure.width;
+                const charHeight = FONT_SIZE;
+
+                canvas.width = ASCII_WIDTH * charWidth;
+                canvas.height = ASCII_HEIGHT * charHeight;
+                
+                console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
+                console.log(`Character cell size: ${charWidth}x${charHeight}`);
+                
+                // Function to get the current memory buffer (may change due to memory growth)
+                function getMemoryBuffer() {
+                    if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) {
+                        return HEAPU8.buffer;
+                    } else if (Module.HEAPU8 && Module.HEAPU8.buffer) {
+                        return Module.HEAPU8.buffer;
+                    } else if (Module.HEAP8 && Module.HEAP8.buffer) {
+                        return Module.HEAP8.buffer;
+                    } else if (Module.wasmMemory && Module.wasmMemory.buffer) {
+                        return Module.wasmMemory.buffer;
+                    }
+                    return null;
+                }
+
+                // Test if we can access memory
+                const testBuffer = getMemoryBuffer();
+                if (!testBuffer) {
+                    console.error("Cannot access WASM memory buffer. Available properties:", Object.keys(Module));
+                    return;
+                }
+                console.log("Memory buffer access confirmed");
+
+                let frameCount = 0;
+                let lastLogTime = Date.now();
+
+                function renderFrame() {
+                    try {
+                        const bufferPtr = getBufferPtr();
+                        const bufferSize = getBufferSize();
+
+                        if (!bufferPtr || !bufferSize) {
+                            if (frameCount % 60 === 0) {
+                                console.log("Waiting for buffer...", { bufferPtr, bufferSize });
+                            }
+                            return;
+                        }
+
+                        // Get fresh memory buffer each frame (may have been reallocated)
+                        const heapBuffer = getMemoryBuffer();
+                        if (!heapBuffer) {
+                            console.error("Cannot access memory buffer");
+                            return;
+                        }
+
+                        const buffer = new Uint8Array(heapBuffer, bufferPtr, bufferSize);
+                        
+                        // Debug: Check if buffer has data
+                        if (frameCount === 0 || Date.now() - lastLogTime > 2000) {
+                            const sampleData = Array.from(buffer.slice(0, 20));
+                            console.log("Buffer sample:", sampleData, "Size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
+                            lastLogTime = Date.now();
+                        }
+                        
+                        ctx.fillStyle = 'black';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.font = FONT;
+
+                        // AsciiCell structure: char character (1 byte) + uint8_t r (1 byte) + uint8_t g (1 byte) + uint8_t b (1 byte) = 4 bytes
+                        // Total expected size: ASCII_WIDTH * ASCII_HEIGHT * 4
+                        const expectedSize = ASCII_WIDTH * ASCII_HEIGHT * 4;
+                        if (buffer.length < expectedSize) {
+                            if (frameCount % 60 === 0) {
+                                console.warn(`Buffer size mismatch: got ${buffer.length}, expected ${expectedSize}`);
+                            }
+                        }
+                        
+                        let i = 0;
+                        let hasData = false;
+                        let nonZeroCount = 0;
+                        
+                        for (let y = 0; y < ASCII_HEIGHT; y++) {
+                            for (let x = 0; x < ASCII_WIDTH; x++) {
+                                if (i + 3 >= buffer.length) break;
+                                
+                                // Read AsciiCell: character, r, g, b
+                                const charCode = buffer[i];
+                                const r = buffer[i + 1];
+                                const g = buffer[i + 2];
+                                const b = buffer[i + 3];
+
+                                // Check if this cell has any data
+                                if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
+                                    hasData = true;
+                                    nonZeroCount++;
+                                }
+
+                                // Only render non-empty cells for better performance
+                                if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
+                                    const char = charCode > 0 && charCode < 256 ? String.fromCharCode(charCode) : ' ';
+                                    
+                                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                                    ctx.fillText(char, x * charWidth, y * charHeight + charHeight);
+                                }
+                                
+                                i += 4;
+                            }
+                        }
+                        
+                        if (frameCount % 60 === 0 && hasData) {
+                            console.log(`Rendering frame ${frameCount}, non-zero cells: ${nonZeroCount}/${ASCII_WIDTH * ASCII_HEIGHT}`);
+                        }
+                        
+                        frameCount++;
+                        
+                        if (frameCount === 1) {
+                            console.log("First frame rendered, hasData:", hasData);
+                        }
+                    } catch (e) {
+                        console.error("Error during canvas rendering:", e);
+                        clearInterval(renderInterval);
+                    }
+                }
+
+                const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
+                
+                callMain(commonArgs);
+            }
 
             window.onerror = function (event) {
                 console.error("Unhandled error:", event);
