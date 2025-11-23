@@ -34,7 +34,7 @@ target_include_directories("${PROGRAM_PREFIX}server"
                            PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/../")
 
 if (DEFINED EMSCRIPTEN)
-    set(SDL_FLAGS "-s USE_SDL=2")
+    set(SDL_FLAGS "-s USE_SDL=2 -msimd128")
     if(ENABLE_SDL2_MIXER)
         set(SDL_FLAGS "${SDL_FLAGS} -s USE_SDL_MIXER=2")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s USE_SDL_MIXER=2")
@@ -60,6 +60,7 @@ set_target_properties("${PROGRAM_PREFIX}server" PROPERTIES LINK_FLAGS "${SDL_FLA
 # Source files used by the game binaries (chocolate-doom, etc.)
 
 set(GAME_SOURCE_FILES
+    i_ascii.cpp         i_ascii.h
     aes_prng.c          aes_prng.h
     d_event.c           d_event.h
                         doomkeys.h
