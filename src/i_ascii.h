@@ -28,23 +28,26 @@ extern "C" {
 #endif
 
 // ASCII output dimensions (can be configured)
-#define ASCII_WIDTH  120
-#define ASCII_HEIGHT 40
+#define ASCII_WIDTH  480
+#define ASCII_HEIGHT 160
 
-// Convert RGBA buffer to ASCII string
-// Input: rgba_buffer - pointer to ARGB8888 pixel data (width x height x 4 bytes)
-//        src_width, src_height - source image dimensions
-//        ascii_buffer - output buffer for ASCII string (must be at least ASCII_WIDTH * ASCII_HEIGHT + 1 bytes)
-//        ascii_width, ascii_height - output ASCII dimensions
-// Note: This function is implemented in C++ (i_ascii.cpp)
+// Struct to hold data for one character cell
+typedef struct {
+    char character;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} AsciiCell;
+
+
+// Convert RGBA buffer to an array of AsciiCell data
 void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer, 
                           int src_width, int src_height,
-                          char *ascii_buffer,
+                          void *cell_buffer,
                           int ascii_width, int ascii_height);
 
-// Get pointer to the current ASCII buffer (for Emscripten export)
-// Returns a null-terminated string
-const char* I_GetASCIIBuffer(void);
+// Get pointer to the current AsciiCell buffer (for Emscripten export)
+const void* I_GetASCIIBuffer(void);
 
 // Initialize ASCII rendering
 void I_InitASCII(void);

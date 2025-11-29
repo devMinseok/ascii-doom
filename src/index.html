@@ -25,12 +25,18 @@
                 background-color: #111;
                 margin: 0;
                 padding: 2ch;
-                /* vietnamese */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
             }
 
             #container {
-                max-width: 930px;
+                max-width: 100vw;
+                max-height: 95vh;
                 margin: auto;
+                display: flex;
+                justify-content: center;
             }
 
             .frame {
@@ -40,132 +46,57 @@
                 display: block;
             }
 
-            /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
             canvas.frame {
                 background-color: black;
-                width: 800px;
-                height: 600px;
+                width: 100%;
+                height: auto;
+                object-fit: contain;
+                image-rendering: -moz-crisp-edges;
+                image-rendering: -webkit-crisp-edges;
+                image-rendering: pixelated;
+                image-rendering: crisp-edges;
             }
 
             #ascii-output {
-                font-family: "Courier New", monospace;
-                font-size: 8px;
-                line-height: 1;
-                color: #0f0;
-                background-color: #000;
-                padding: 10px;
-                white-space: pre;
-                overflow: hidden;
-                display: none; /* Initially hidden, show when ASCII mode is enabled */
+                display: none; 
             }
         </style>
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
     </head>
     <body>
         <div id="container" class="noselect">
+            <!-- Hidden canvas for SDL (required for initialization) -->
+            <canvas id="sdl-canvas" style="display: none; width: 320px; height: 200px;"></canvas>
+            <!-- Visible canvas for ASCII rendering -->
             <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
             <pre id="ascii-output"></pre>
         </div>
         <script>
-            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare"];
-
-            // ASCII rendering variables
-            var asciiOutput = document.getElementById("ascii-output");
-            var asciiGetBuffer = null;
-            var asciiUpdateInterval = null;
-            var asciiEnabled = true; // Set to false to disable ASCII rendering
+            // 공통적으로 Doom 실행 시에 사용할 인자들
+            // - doom1.wad: 기본 WAD 파일
+            // - -window, -nogui, -nomusic 등: 웹 환경에 맞게 최소 옵션으로 실행
+            // - -force_software_renderer 1: WebGL 대신 소프트웨어 렌더러 사용 강제
+            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-force_software_renderer", "1"];
 
             var Module = {
                 onRuntimeInitialized: () => {
-                    console.log("Module initialized, checking for ascii_get_buffer...");
-                    
-                    // Try multiple methods to get the function
-                    var getASCIIBuffer = null;
-                    
-                    // Method 1: Try cwrap
-                    try {
-                        getASCIIBuffer = Module.cwrap('ascii_get_buffer', 'string', []);
-                        if (getASCIIBuffer) {
-                            console.log("ascii_get_buffer wrapped with cwrap (string)");
+                    console.log("Module initialized, setting up canvas renderer...");
+
+                    // Hide SDL canvas and any canvas that Emscripten might have created automatically
+                    const sdlCanvas = document.getElementById("sdl-canvas");
+                    if (sdlCanvas) {
+                        sdlCanvas.style.display = "none";
+                    }
+                    const canvases = document.querySelectorAll("canvas");
+                    canvases.forEach(canvas => {
+                        if (canvas.id !== "canvas") {
+                            canvas.style.display = "none";
                         }
-                    } catch (e) {
-                        console.log("cwrap (string) failed:", e);
-                    }
+                    });
                     
-                    // Method 2: Try cwrap with number return type
-                    if (!getASCIIBuffer) {
-                        try {
-                            var getPtr = Module.cwrap('ascii_get_buffer', 'number', []);
-                            if (getPtr) {
-                                getASCIIBuffer = function() {
-                                    var ptr = getPtr();
-                                    return ptr ? Module.UTF8ToString(ptr) : '';
-                                };
-                                console.log("ascii_get_buffer wrapped with cwrap (number)");
-                            }
-                        } catch (e) {
-                            console.log("cwrap (number) failed:", e);
-                        }
-                    }
-                    
-                    // Method 3: Try ccall
-                    if (!getASCIIBuffer) {
-                        try {
-                            if (typeof Module._ascii_get_buffer !== 'undefined') {
-                                getASCIIBuffer = function() {
-                                    var ptr = Module.ccall('ascii_get_buffer', 'number', [], []);
-                                    return ptr ? Module.UTF8ToString(ptr) : '';
-                                };
-                                console.log("ascii_get_buffer found via ccall");
-                            }
-                        } catch (e) {
-                            console.log("ccall failed:", e);
-                        }
-                    }
-                    
-                    // Method 4: Check if function exists directly
-                    if (!getASCIIBuffer && typeof Module._ascii_get_buffer !== 'undefined') {
-                        console.log("Found _ascii_get_buffer, trying direct call");
-                        try {
-                            getASCIIBuffer = function() {
-                                var ptr = Module._ascii_get_buffer();
-                                return ptr ? Module.UTF8ToString(ptr) : '';
-                            };
-                        } catch (e) {
-                            console.log("Direct call failed:", e);
-                        }
-                    }
-                    
-                    if (!getASCIIBuffer) {
-                        console.error("Failed to find ascii_get_buffer function");
-                        console.log("Available _ functions:", Object.keys(Module).filter(k => k.startsWith('_') && typeof Module[k] === 'function').slice(0, 30));
-                    } else {
-                        asciiGetBuffer = getASCIIBuffer;
-                        console.log("ASCII buffer function ready");
-                    }
-                    
-                    // Hide canvas and show ASCII output if enabled
-                    if (asciiEnabled) {
-                        document.getElementById("canvas").style.display = "none";
-                        asciiOutput.style.display = "block";
-                        
-                        // Update ASCII output periodically
-                        asciiUpdateInterval = setInterval(() => {
-                            if (asciiGetBuffer) {
-                                try {
-                                    var asciiStr = asciiGetBuffer();
-                                    if (asciiStr) {
-                                        asciiOutput.textContent = asciiStr;
-                                    }
-                                } catch (e) {
-                                    console.error("Error getting ASCII buffer:", e);
-                                    console.error("Stack:", e.stack);
-                                }
-                            }
-                        }, 16); // ~60 FPS
-                    }
-                    
-                    callMain(commonArgs);
+                    // Wait a bit for HEAPU8 to be fully initialized
+                    setTimeout(() => {
+                        setupRenderer();
+                    }, 100);
                 },
                 noInitialRun: true,
                 preRun: () => {
@@ -176,36 +107,184 @@
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
                     console.error(text);
                 },
-                canvas: (function () {
-                    var canvas = document.getElementById("canvas");
-                    canvas.addEventListener(
-                        "webglcontextlost",
-                        function (e) {
-                            alert("WebGL context lost. You will need to reload the page.");
-                            e.preventDefault();
-                        },
-                        false
-                    );
-                    return canvas;
-                })(),
+                // SDL이 사용할 실제 캔버스 (숨겨져 있음)
+                canvas: document.getElementById("sdl-canvas"),
                 print: function (text) {
                     console.log(text);
                 },
                 setStatus: function (text) {
                     console.log(text);
-                },
-                totalDependencies: 0,
-                monitorRunDependencies: function (left) {
-                    this.totalDependencies = Math.max(this.totalDependencies, left);
-                    Module.setStatus(left ? "Preparing... (" + (this.totalDependencies - left) + "/" + this.totalDependencies + ")" : "All downloads complete.");
-                },
+                }
             };
 
+            function setupRenderer() {
+                    // WASM에서 export 한 함수들을 JS에서 호출하기 위해 cwrap 사용
+                    // ascii_get_buffer    : AsciiCell 버퍼의 포인터를 반환
+                    // ascii_get_buffer_size: AsciiCell 버퍼의 총 바이트 크기 반환
+                    const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
+                    const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
+
+                    if (!getBufferPtr || !getBufferSize) {
+                        console.error("Failed to wrap WASM buffer functions.");
+                        return;
+                    }
+
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    // C 쪽에서 정의된 ASCII 해상도 (i_ascii.h 의 ASCII_WIDTH/HEIGHT)
+                    const ASCII_WIDTH = 480;
+                    const ASCII_HEIGHT = 160;
+
+                    // 사용자 요청에 따라 최종 캔버스 해상도 설정
+                    const TARGET_CANVAS_WIDTH = 1600;
+                    const TARGET_CANVAS_HEIGHT = 1200;
+
+                    // 각 아스키 문자 셀이 차지할 픽셀 크기 계산
+                    const charWidth = TARGET_CANVAS_WIDTH / ASCII_WIDTH;
+                    const charHeight = TARGET_CANVAS_HEIGHT / ASCII_HEIGHT;
+
+                    // 폰트 크기는 charHeight에 맞춰 설정 (소수점 폰트 크기는 일부 브라우저에서 렌더링 문제가 있을 수 있으므로 반올림)
+                    const FONT_SIZE = Math.round(charHeight); 
+                    const FONT = `${FONT_SIZE}px "Courier New", monospace`;
+                    
+                    ctx.font = FONT; // 폰트 적용 (measureText는 이제 사용하지 않음)
+
+                    canvas.width = TARGET_CANVAS_WIDTH;
+                    canvas.height = TARGET_CANVAS_HEIGHT;
+
+                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
+                    console.log(`Character cell size: ${charWidth}x${charHeight}`);
+                
+                // 현재 WASM 메모리 버퍼를 얻는 함수
+                // Emscripten 설정에 따라 HEAPU8 이나 wasmMemory 등 접근 방법이 달라질 수 있음
+                function getMemoryBuffer() {
+                    if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) {
+                        return HEAPU8.buffer;
+                    } else if (Module.HEAPU8 && Module.HEAPU8.buffer) {
+                        return Module.HEAPU8.buffer;
+                    } else if (Module.HEAP8 && Module.HEAP8.buffer) {
+                        return Module.HEAP8.buffer;
+                    } else if (Module.wasmMemory && Module.wasmMemory.buffer) {
+                        return Module.wasmMemory.buffer;
+                    }
+                    return null;
+                }
+
+                // Test if we can access memory
+                const testBuffer = getMemoryBuffer();
+                if (!testBuffer) {
+                    console.error("Cannot access WASM memory buffer. Available properties:", Object.keys(Module));
+                    return;
+                }
+                console.log("Memory buffer access confirmed");
+
+                // 렌더링 프레임 수 및 디버깅용 타임스탬프
+                let frameCount = 0;
+                let lastLogTime = Date.now();
+
+                    function renderFrame() {
+                        try {
+                            const bufferPtr = getBufferPtr();
+                            const bufferSize = getBufferSize();
+
+                        if (!bufferPtr || !bufferSize) {
+                            if (frameCount % 60 === 0) {
+                                console.log("Waiting for buffer...", { bufferPtr, bufferSize });
+                            }
+                            return;
+                        }
+
+                        // Get fresh memory buffer each frame (may have been reallocated)
+                        const heapBuffer = getMemoryBuffer();
+                        if (!heapBuffer) {
+                            console.error("Cannot access memory buffer");
+                            return;
+                        }
+
+                        // C++에서 만든 AsciiCell 배열(연속된 구조체 메모리)을 JS에서
+                        // 그대로 Uint8Array 로 바라본 뒤, 4바이트 단위로 파싱한다.
+                        const buffer = new Uint8Array(heapBuffer, bufferPtr, bufferSize);
+                        
+                        // Debug: Check if buffer has data
+                        if (frameCount === 0 || Date.now() - lastLogTime > 2000) {
+                            const sampleData = Array.from(buffer.slice(0, 20));
+                            console.log("Buffer sample:", sampleData, "Size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
+                            lastLogTime = Date.now();
+                        }
+                            
+                            ctx.fillStyle = 'black';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.font = FONT;
+
+                        // AsciiCell 구조체 레이아웃:
+                        //   char    character (1 byte)
+                        //   uint8_t r         (1 byte)
+                        //   uint8_t g         (1 byte)
+                        //   uint8_t b         (1 byte)
+                        // → 총 4 바이트가 한 글자 셀을 표현
+                        // 따라서 전체 버퍼 크기는 ASCII_WIDTH * ASCII_HEIGHT * 4 바이트가 되어야 함
+                        const expectedSize = ASCII_WIDTH * ASCII_HEIGHT * 4;
+                        if (buffer.length < expectedSize) {
+                            if (frameCount % 60 === 0) {
+                                console.warn(`Buffer size mismatch: got ${buffer.length}, expected ${expectedSize}`);
+                            }
+                        }
+
+                            let i = 0;
+                        let hasData = false;
+                        let nonZeroCount = 0;
+                        
+                            for (let y = 0; y < ASCII_HEIGHT; y++) {
+                                for (let x = 0; x < ASCII_WIDTH; x++) {
+                                if (i + 3 >= buffer.length) break;
+                                
+                                // Read AsciiCell: character, r, g, b
+                                    const charCode = buffer[i];
+                                    const r = buffer[i + 1];
+                                    const g = buffer[i + 2];
+                                    const b = buffer[i + 3];
+
+                                // Check if this cell has any data
+                                if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
+                                    hasData = true;
+                                    nonZeroCount++;
+                                }
+
+                                // Only render non-empty cells for better performance
+                                if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
+                                    const char = charCode > 0 && charCode < 256 ? String.fromCharCode(charCode) : ' ';
+                                    
+                                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                                    ctx.fillText(char, x * charWidth, y * charHeight + charHeight);
+                                }
+                                    
+                                    i += 4;
+                                }
+                            }
+                        
+                        if (frameCount % 60 === 0 && hasData) {
+                            console.log(`Rendering frame ${frameCount}, non-zero cells: ${nonZeroCount}/${ASCII_WIDTH * ASCII_HEIGHT}`);
+                        }
+                        
+                        frameCount++;
+                        
+                        if (frameCount === 1) {
+                            console.log("First frame rendered, hasData:", hasData);
+                        }
+                        } catch (e) {
+                            console.error("Error during canvas rendering:", e);
+                            clearInterval(renderInterval);
+                        }
+                    }
+
+                    const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
+                    
+                    callMain(commonArgs);
+            }
+
             window.onerror = function (event) {
-                Module.setStatus("Exception thrown, see JavaScript console");
-                Module.setStatus = function (text) {
-                    if (text) Module.printErr("[post-exception status] " + text);
-                };
+                console.error("Unhandled error:", event);
             };
         </script>
         <script async type="text/javascript" src="chocolate-doom.js"></script>

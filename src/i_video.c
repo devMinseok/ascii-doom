@@ -804,7 +804,7 @@ void I_FinishUpdate (void)
     // Convert RGBA buffer to ASCII for web display
     if (argbbuffer != NULL && argbbuffer->pixels != NULL)
     {
-        char *ascii_buf = (char *)I_GetASCIIBuffer();
+        void *ascii_buf = (void *)I_GetASCIIBuffer();
         I_ConvertRGBAtoASCII((const uint32_t *)argbbuffer->pixels,
                              SCREENWIDTH, SCREENHEIGHT,
                              ascii_buf,
