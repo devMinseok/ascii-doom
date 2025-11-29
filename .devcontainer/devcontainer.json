@@ -21,7 +21,7 @@
     }
   },
   
-  "postCreateCommand": "source /opt/emsdk/emsdk_env.sh && echo 'Emscripten environment ready!'",
+  "postCreateCommand": "/bin/bash -lc 'source /opt/emsdk/emsdk_env.sh && echo \"Emscripten environment ready!\"'",
   
   "remoteUser": "root",
   
