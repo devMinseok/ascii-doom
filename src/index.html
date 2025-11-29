@@ -61,12 +61,16 @@
             <pre id="ascii-output"></pre>
         </div>
         <script>
+            // 공통적으로 Doom 실행 시에 사용할 인자들
+            // - doom1.wad: 기본 WAD 파일
+            // - -window, -nogui, -nomusic 등: 웹 환경에 맞게 최소 옵션으로 실행
+            // - -force_software_renderer 1: WebGL 대신 소프트웨어 렌더러 사용 강제
             var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-force_software_renderer", "1"];
 
             var Module = {
                 onRuntimeInitialized: () => {
                     console.log("Module initialized, setting up canvas renderer...");
-                    
+
                     // Hide SDL canvas and any canvas that Emscripten might have created automatically
                     const sdlCanvas = document.getElementById("sdl-canvas");
                     if (sdlCanvas) {
@@ -93,6 +97,7 @@
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
                     console.error(text);
                 },
+                // SDL이 사용할 실제 캔버스 (숨겨져 있음)
                 canvas: document.getElementById("sdl-canvas"),
                 print: function (text) {
                     console.log(text);
@@ -103,35 +108,42 @@
             };
 
             function setupRenderer() {
-                const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
-                const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
+                    // WASM에서 export 한 함수들을 JS에서 호출하기 위해 cwrap 사용
+                    // ascii_get_buffer    : AsciiCell 버퍼의 포인터를 반환
+                    // ascii_get_buffer_size: AsciiCell 버퍼의 총 바이트 크기 반환
+                    const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
+                    const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
 
-                if (!getBufferPtr || !getBufferSize) {
-                    console.error("Failed to wrap WASM buffer functions.");
-                    return;
-                }
+                    if (!getBufferPtr || !getBufferSize) {
+                        console.error("Failed to wrap WASM buffer functions.");
+                        return;
+                    }
 
-                const canvas = document.getElementById('canvas');
-                const ctx = canvas.getContext('2d');
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
 
-                const ASCII_WIDTH = 240;
-                const ASCII_HEIGHT = 80;
-                const FONT_SIZE = 9;
-                const FONT = `${FONT_SIZE}px "Courier New", monospace`;
+                    // C 쪽에서 정의된 ASCII 해상도 (i_ascii.h 의 ASCII_WIDTH/HEIGHT)
+                    const ASCII_WIDTH = 240;
+                    const ASCII_HEIGHT = 80;
+
+                    // 한 문자 셀의 픽셀 크기 (고정 폰트 크기 사용)
+                    const FONT_SIZE = 9;
+                    const FONT = `${FONT_SIZE}px "Courier New", monospace`;
+                    
+                    // Calculate character cell size
+                    ctx.font = FONT;
+                    const charMeasure = ctx.measureText("M");
+                    const charWidth = charMeasure.width;
+                    const charHeight = FONT_SIZE;
+
+                    canvas.width = ASCII_WIDTH * charWidth;
+                    canvas.height = ASCII_HEIGHT * charHeight;
+                    
+                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
+                    console.log(`Character cell size: ${charWidth}x${charHeight}`);
                 
-                // Calculate character cell size
-                ctx.font = FONT;
-                const charMeasure = ctx.measureText("M");
-                const charWidth = charMeasure.width;
-                const charHeight = FONT_SIZE;
-
-                canvas.width = ASCII_WIDTH * charWidth;
-                canvas.height = ASCII_HEIGHT * charHeight;
-                
-                console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
-                console.log(`Character cell size: ${charWidth}x${charHeight}`);
-                
-                // Function to get the current memory buffer (may change due to memory growth)
+                // 현재 WASM 메모리 버퍼를 얻는 함수
+                // Emscripten 설정에 따라 HEAPU8 이나 wasmMemory 등 접근 방법이 달라질 수 있음
                 function getMemoryBuffer() {
                     if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) {
                         return HEAPU8.buffer;
@@ -153,13 +165,14 @@
                 }
                 console.log("Memory buffer access confirmed");
 
+                // 렌더링 프레임 수 및 디버깅용 타임스탬프
                 let frameCount = 0;
                 let lastLogTime = Date.now();
 
-                function renderFrame() {
-                    try {
-                        const bufferPtr = getBufferPtr();
-                        const bufferSize = getBufferSize();
+                    function renderFrame() {
+                        try {
+                            const bufferPtr = getBufferPtr();
+                            const bufferSize = getBufferSize();
 
                         if (!bufferPtr || !bufferSize) {
                             if (frameCount % 60 === 0) {
@@ -175,6 +188,8 @@
                             return;
                         }
 
+                        // C++에서 만든 AsciiCell 배열(연속된 구조체 메모리)을 JS에서
+                        // 그대로 Uint8Array 로 바라본 뒤, 4바이트 단위로 파싱한다.
                         const buffer = new Uint8Array(heapBuffer, bufferPtr, bufferSize);
                         
                         // Debug: Check if buffer has data
@@ -183,33 +198,38 @@
                             console.log("Buffer sample:", sampleData, "Size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
                             lastLogTime = Date.now();
                         }
-                        
-                        ctx.fillStyle = 'black';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.font = FONT;
+                            
+                            ctx.fillStyle = 'black';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.font = FONT;
 
-                        // AsciiCell structure: char character (1 byte) + uint8_t r (1 byte) + uint8_t g (1 byte) + uint8_t b (1 byte) = 4 bytes
-                        // Total expected size: ASCII_WIDTH * ASCII_HEIGHT * 4
+                        // AsciiCell 구조체 레이아웃:
+                        //   char    character (1 byte)
+                        //   uint8_t r         (1 byte)
+                        //   uint8_t g         (1 byte)
+                        //   uint8_t b         (1 byte)
+                        // → 총 4 바이트가 한 글자 셀을 표현
+                        // 따라서 전체 버퍼 크기는 ASCII_WIDTH * ASCII_HEIGHT * 4 바이트가 되어야 함
                         const expectedSize = ASCII_WIDTH * ASCII_HEIGHT * 4;
                         if (buffer.length < expectedSize) {
                             if (frameCount % 60 === 0) {
                                 console.warn(`Buffer size mismatch: got ${buffer.length}, expected ${expectedSize}`);
                             }
                         }
-                        
-                        let i = 0;
+
+                            let i = 0;
                         let hasData = false;
                         let nonZeroCount = 0;
                         
-                        for (let y = 0; y < ASCII_HEIGHT; y++) {
-                            for (let x = 0; x < ASCII_WIDTH; x++) {
+                            for (let y = 0; y < ASCII_HEIGHT; y++) {
+                                for (let x = 0; x < ASCII_WIDTH; x++) {
                                 if (i + 3 >= buffer.length) break;
                                 
                                 // Read AsciiCell: character, r, g, b
-                                const charCode = buffer[i];
-                                const r = buffer[i + 1];
-                                const g = buffer[i + 2];
-                                const b = buffer[i + 3];
+                                    const charCode = buffer[i];
+                                    const r = buffer[i + 1];
+                                    const g = buffer[i + 2];
+                                    const b = buffer[i + 3];
 
                                 // Check if this cell has any data
                                 if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
@@ -224,10 +244,10 @@
                                     ctx.fillStyle = `rgb(${r},${g},${b})`;
                                     ctx.fillText(char, x * charWidth, y * charHeight + charHeight);
                                 }
-                                
-                                i += 4;
+                                    
+                                    i += 4;
+                                }
                             }
-                        }
                         
                         if (frameCount % 60 === 0 && hasData) {
                             console.log(`Rendering frame ${frameCount}, non-zero cells: ${nonZeroCount}/${ASCII_WIDTH * ASCII_HEIGHT}`);
@@ -238,15 +258,15 @@
                         if (frameCount === 1) {
                             console.log("First frame rendered, hasData:", hasData);
                         }
-                    } catch (e) {
-                        console.error("Error during canvas rendering:", e);
-                        clearInterval(renderInterval);
+                        } catch (e) {
+                            console.error("Error during canvas rendering:", e);
+                            clearInterval(renderInterval);
+                        }
                     }
-                }
 
-                const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
-                
-                callMain(commonArgs);
+                    const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
+                    
+                    callMain(commonArgs);
             }
 
             window.onerror = function (event) {

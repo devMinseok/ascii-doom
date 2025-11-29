@@ -38,6 +38,7 @@
 
 #define CELL_BUFFER_SIZE (ASCII_WIDTH * ASCII_HEIGHT)
 static AsciiCell cell_buffer[CELL_BUFFER_SIZE];
+// ASCII 렌더링이 초기화되었는지 여부를 나타내는 플래그
 static boolean ascii_initialized = false;
 
 extern "C" {
@@ -47,6 +48,8 @@ void I_InitASCII(void)
     if (ascii_initialized)
         return;
     
+    // 전체 AsciiCell 버퍼를 0으로 초기화
+    //  → 처음에는 화면 전체가 '빈 문자/검은색' 상태가 됨
     std::memset(cell_buffer, 0, sizeof(cell_buffer));
     ascii_initialized = true;
 }
@@ -61,6 +64,8 @@ void I_ShutdownASCII(void)
 
 const void* I_GetASCIIBuffer(void)
 {
+    // JS 쪽에서 이 포인터를 받아서 Uint8Array 로 캐스팅해 사용한다.
+    // (ascii_get_buffer() 를 통해 export 됨)
     return cell_buffer;
 }
 
@@ -70,18 +75,21 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                           void *output_buffer,
                           int ascii_width, int ascii_height)
 {
+    // 화면 밝기에 따라 다른 문자를 사용하는 ASCII 팔레트
     const std::string ascii_chars = " .:-=+*#%@";
+    // 출력으로 사용할 AsciiCell 배열
     AsciiCell* out_cells = static_cast<AsciiCell*>(output_buffer);
 
+    // ascii_width x ascii_height 해상도의 "문자 셀"로 원본 RGBA 화면을 축소 샘플링한다.
     for (int y = 0; y < ascii_height; ++y) {
         for (int x = 0; x < ascii_width; ++x) {
-            // Calculate source region
+            // 이 문자 셀이 담당하는 원본 화면 상의 영역을 계산
             int src_x_start = (x * src_width) / ascii_width;
             int src_y_start = (y * src_height) / ascii_height;
             int src_x_end = ((x + 1) * src_width) / ascii_width;
             int src_y_end = ((y + 1) * src_height) / ascii_height;
             
-            // Average color and brightness in region
+            // 해당 영역의 RGB 값을 모두 합산하여 평균 색/밝기를 구한다.
             long long total_r = 0, total_g = 0, total_b = 0;
             int count = 0;
 
@@ -125,9 +133,11 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
 #endif
             }
             
+            // 2D 좌표 (x, y) 를 1D 인덱스로 변환해서 AsciiCell 에 기록
             AsciiCell& cell = out_cells[y * ascii_width + x];
 
             if (count == 0) {
+                // 샘플링할 픽셀이 하나도 없으면 공백 문자 + 검은색으로 채움
                 cell.character = ' ';
                 cell.r = 0;
                 cell.g = 0;
@@ -135,14 +145,18 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                 continue;
             }
             
+            // 영역 내 평균 색상 계산
             int avg_r = total_r / count;
             int avg_g = total_g / count;
             int avg_b = total_b / count;
             
+            // 가중치를 적용해 '밝기' 값으로 변환 (0~255)
             int brightness = (avg_r * 299 + avg_g * 587 + avg_b * 114) / 1000;
             
+            // 밝기를 ascii_chars 인덱스로 매핑
             int char_idx = (brightness * (ascii_chars.length() - 1)) / 255;
 
+            // 최종적으로 이 셀에 사용할 문자/색상 값을 저장
             cell.character = ascii_chars[char_idx];
             cell.r = avg_r;
             cell.g = avg_g;
