@@ -32,8 +32,11 @@
             }
 
             #container {
-                max-width: 1860px;
+                max-width: 100vw;
+                max-height: 95vh;
                 margin: auto;
+                display: flex;
+                justify-content: center;
             }
 
             .frame {
@@ -45,6 +48,13 @@
 
             canvas.frame {
                 background-color: black;
+                width: 100%;
+                height: auto;
+                object-fit: contain;
+                image-rendering: -moz-crisp-edges;
+                image-rendering: -webkit-crisp-edges;
+                image-rendering: pixelated;
+                image-rendering: crisp-edges;
             }
 
             #ascii-output {
@@ -123,22 +133,26 @@
                     const ctx = canvas.getContext('2d');
 
                     // C 쪽에서 정의된 ASCII 해상도 (i_ascii.h 의 ASCII_WIDTH/HEIGHT)
-                    const ASCII_WIDTH = 240;
-                    const ASCII_HEIGHT = 80;
+                    const ASCII_WIDTH = 480;
+                    const ASCII_HEIGHT = 160;
 
-                    // 한 문자 셀의 픽셀 크기 (고정 폰트 크기 사용)
-                    const FONT_SIZE = 9;
+                    // 사용자 요청에 따라 최종 캔버스 해상도 설정
+                    const TARGET_CANVAS_WIDTH = 1600;
+                    const TARGET_CANVAS_HEIGHT = 1200;
+
+                    // 각 아스키 문자 셀이 차지할 픽셀 크기 계산
+                    const charWidth = TARGET_CANVAS_WIDTH / ASCII_WIDTH;
+                    const charHeight = TARGET_CANVAS_HEIGHT / ASCII_HEIGHT;
+
+                    // 폰트 크기는 charHeight에 맞춰 설정 (소수점 폰트 크기는 일부 브라우저에서 렌더링 문제가 있을 수 있으므로 반올림)
+                    const FONT_SIZE = Math.round(charHeight); 
                     const FONT = `${FONT_SIZE}px "Courier New", monospace`;
                     
-                    // Calculate character cell size
-                    ctx.font = FONT;
-                    const charMeasure = ctx.measureText("M");
-                    const charWidth = charMeasure.width;
-                    const charHeight = FONT_SIZE;
+                    ctx.font = FONT; // 폰트 적용 (measureText는 이제 사용하지 않음)
 
-                    canvas.width = ASCII_WIDTH * charWidth;
-                    canvas.height = ASCII_HEIGHT * charHeight;
-                    
+                    canvas.width = TARGET_CANVAS_WIDTH;
+                    canvas.height = TARGET_CANVAS_HEIGHT;
+
                     console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
                     console.log(`Character cell size: ${charWidth}x${charHeight}`);
                 

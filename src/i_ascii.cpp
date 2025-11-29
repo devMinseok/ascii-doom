@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 #include <emscripten.h>
+#include <cmath>
 
 #if defined(__wasm_simd128__)
 #include <wasm_simd128.h>
@@ -158,9 +159,10 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
 
             // 최종적으로 이 셀에 사용할 문자/색상 값을 저장
             cell.character = ascii_chars[char_idx];
-            cell.r = avg_r;
-            cell.g = avg_g;
-            cell.b = avg_b;
+            const float gamma = 0.5;
+            cell.r = std::min(255, static_cast<int>(pow(avg_r / 255.0, gamma) * 255.0));
+            cell.g = std::min(255, static_cast<int>(pow(avg_g / 255.0, gamma) * 255.0));
+            cell.b = std::min(255, static_cast<int>(pow(avg_b / 255.0, gamma) * 255.0));
         }
     }
 }

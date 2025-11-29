@@ -28,8 +28,8 @@ extern "C" {
 #endif
 
 // ASCII output dimensions (can be configured)
-#define ASCII_WIDTH  240
-#define ASCII_HEIGHT 80
+#define ASCII_WIDTH  480
+#define ASCII_HEIGHT 160
 
 // Struct to hold data for one character cell
 typedef struct {
