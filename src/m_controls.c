@@ -33,8 +33,8 @@ int key_up = KEY_UPARROW;
 int key_down = KEY_DOWNARROW; 
 int key_strafeleft = ',';
 int key_straferight = '.';
-int key_fire = KEY_RCTRL;
-int key_use = ' ';
+int key_fire = 'a';
+int key_use = 's';
 int key_strafe = KEY_RALT;
 int key_speed = KEY_RSHIFT; 
 
@@ -104,7 +104,7 @@ int key_invdrop   = KEY_BACKSPACE;
 // Mouse controls
 //
 
-int mousebfire = 0;
+int mousebfire = -1;
 int mousebstrafe = 1;
 int mousebforward = 2;
 int mousebspeed = 3;
