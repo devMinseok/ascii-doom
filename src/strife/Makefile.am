@@ -79,7 +79,15 @@ wi_stuff.c         wi_stuff.h
 
 if HAVE_ICONS
 
-strife_icon.c : $(top_builddir)/data/strife.png
-	$(top_builddir)/data/convert-icon $(top_builddir)/data/strife.png $@
+strife_icon.c :
+	@if test -f $(top_builddir)/data/strife.png; then \
+		$(top_builddir)/data/convert-icon $(top_builddir)/data/strife.png $@; \
+	elif test -f $(srcdir)/strife_icon.c; then \
+		cp $(srcdir)/strife_icon.c $@; \
+	else \
+		echo "static int strife_icon_w = 1;" > $@; \
+		echo "static int strife_icon_h = 1;" >> $@; \
+		echo "static const unsigned int strife_icon_data[] = { 0x00000000 };" >> $@; \
+	fi
 
 endif

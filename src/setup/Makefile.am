@@ -35,8 +35,16 @@ CLEANFILES = $(app_DATA)
 
 if HAVE_ICONS
 
-setup_icon.c : $(top_builddir)/data/setup.png
-	$(top_builddir)/data/convert-icon $(top_builddir)/data/setup.png $@
+setup_icon.c :
+	@if test -f $(top_builddir)/data/setup.png; then \
+		$(top_builddir)/data/convert-icon $(top_builddir)/data/setup.png $@; \
+	elif test -f $(srcdir)/setup_icon.c; then \
+		cp $(srcdir)/setup_icon.c $@; \
+	else \
+		echo "static int setup_icon_w = 1;" > $@; \
+		echo "static int setup_icon_h = 1;" >> $@; \
+		echo "static const unsigned int setup_icon_data[] = { 0x00000000 };" >> $@; \
+	fi
 
 endif
 

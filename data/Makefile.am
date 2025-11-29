@@ -21,19 +21,39 @@ icons_DATA = @PROGRAM_PREFIX@doom.png    \
              @PROGRAM_PREFIX@setup.png   \
              @PROGRAM_PREFIX@strife.png
 
-@PROGRAM_PREFIX@doom.png : doom.png
-	cp $(top_srcdir)/data/doom.png $@
+@PROGRAM_PREFIX@doom.png :
+	@if test -f $(top_srcdir)/data/doom.png; then \
+		cp $(top_srcdir)/data/doom.png $@; \
+	else \
+		touch $@; \
+	fi
 
-@PROGRAM_PREFIX@heretic.png : heretic.png
-	cp $(top_srcdir)/data/heretic.png $@
+@PROGRAM_PREFIX@heretic.png :
+	@if test -f $(top_srcdir)/data/heretic.png; then \
+		cp $(top_srcdir)/data/heretic.png $@; \
+	else \
+		touch $@; \
+	fi
 
-@PROGRAM_PREFIX@hexen.png : hexen.png
-	cp $(top_srcdir)/data/hexen.png $@
+@PROGRAM_PREFIX@hexen.png :
+	@if test -f $(top_srcdir)/data/hexen.png; then \
+		cp $(top_srcdir)/data/hexen.png $@; \
+	else \
+		touch $@; \
+	fi
 
-@PROGRAM_PREFIX@setup.png : setup.png
-	cp $(top_srcdir)/data/setup.png $@
+@PROGRAM_PREFIX@setup.png :
+	@if test -f $(top_srcdir)/data/setup.png; then \
+		cp $(top_srcdir)/data/setup.png $@; \
+	else \
+		touch $@; \
+	fi
 
-@PROGRAM_PREFIX@strife.png : strife.png
-	cp $(top_srcdir)/data/strife.png $@
+@PROGRAM_PREFIX@strife.png :
+	@if test -f $(top_srcdir)/data/strife.png; then \
+		cp $(top_srcdir)/data/strife.png $@; \
+	else \
+		touch $@; \
+	fi
 
 CLEANFILES = $(icons_DATA)

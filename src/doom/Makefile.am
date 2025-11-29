@@ -77,7 +77,15 @@ wi_stuff.c         wi_stuff.h
 
 if HAVE_ICONS
 
-doom_icon.c : $(top_builddir)/data/doom.png
-	$(top_builddir)/data/convert-icon $(top_builddir)/data/doom.png $@
+doom_icon.c :
+	@if test -f $(top_builddir)/data/doom.png; then \
+		$(top_builddir)/data/convert-icon $(top_builddir)/data/doom.png $@; \
+	elif test -f $(srcdir)/doom_icon.c; then \
+		cp $(srcdir)/doom_icon.c $@; \
+	else \
+		echo "static int doom_icon_w = 1;" > $@; \
+		echo "static int doom_icon_h = 1;" >> $@; \
+		echo "static const unsigned int doom_icon_data[] = { 0x00000000 };" >> $@; \
+	fi
 
 endif

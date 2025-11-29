@@ -65,7 +65,15 @@ sv_save.c                             \
 
 if HAVE_ICONS
 
-hexen_icon.c : $(top_builddir)/data/hexen.png
-	$(top_builddir)/data/convert-icon $(top_builddir)/data/hexen.png $@
+hexen_icon.c :
+	@if test -f $(top_builddir)/data/hexen.png; then \
+		$(top_builddir)/data/convert-icon $(top_builddir)/data/hexen.png $@; \
+	elif test -f $(srcdir)/hexen_icon.c; then \
+		cp $(srcdir)/hexen_icon.c $@; \
+	else \
+		echo "static int hexen_icon_w = 1;" > $@; \
+		echo "static int hexen_icon_h = 1;" >> $@; \
+		echo "static const unsigned int hexen_icon_data[] = { 0x00000000 };" >> $@; \
+	fi
 
 endif

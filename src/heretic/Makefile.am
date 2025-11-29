@@ -66,7 +66,15 @@ s_sound.c              s_sound.h
 
 if HAVE_ICONS
 
-heretic_icon.c : $(top_builddir)/data/heretic.png
-	$(top_builddir)/data/convert-icon $(top_builddir)/data/heretic.png $@
+heretic_icon.c :
+	@if test -f $(top_builddir)/data/heretic.png; then \
+		$(top_builddir)/data/convert-icon $(top_builddir)/data/heretic.png $@; \
+	elif test -f $(srcdir)/heretic_icon.c; then \
+		cp $(srcdir)/heretic_icon.c $@; \
+	else \
+		echo "static int heretic_icon_w = 1;" > $@; \
+		echo "static int heretic_icon_h = 1;" >> $@; \
+		echo "static const unsigned int heretic_icon_data[] = { 0x00000000 };" >> $@; \
+	fi
 
 endif
