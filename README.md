@@ -72,3 +72,8 @@ GitHub Actions가 자동으로 빌드하고 배포합니다.
 - **컨테이너 연결 실패**: Docker Desktop이 실행 중인지 확인
 - **빌드 실패**: `emmake make clean && emmake make -j4 -k` 재시도
 - **아이콘 파일 에러**: 무시해도 됨 (게임 빌드에는 영향 없음)
+
+## 조작키
+이동 : 방향키
+공격 : a
+문 열기 : s
