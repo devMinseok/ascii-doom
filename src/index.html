@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en-us">
     <head>
-        <title>Websockets Doom</title>
+        <title>Websockets Doom - TERMINAL</title>
         <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
         <style>
             @font-face {
@@ -18,63 +18,170 @@
 
             html {
                 font-family: "VT323", monospace;
-                font-size: 12px;
+                font-size: 16px;
+                height: 100%;
+                overflow: hidden;
             }
 
             body {
-                background-color: #111;
+                background-color: #050505;
+                background-image: 
+                    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(255, 0, 0, 0.02));
+                background-size: 100% 2px, 3px 100%;
                 margin: 0;
-                padding: 2ch;
+                padding: 0;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 min-height: 100vh;
+                color: #d32f2f;
             }
 
+            /* 모니터 전체 프레임 */
             #container {
-                max-width: 100vw;
-                max-height: 95vh;
-                margin: auto;
+                position: relative;
+                width: 95vw;
+                max-width: 1600px;
+                height: 90vh; /* 높이를 화면의 90%로 고정 */
+                aspect-ratio: 4/3;
+                border: 4px solid #444;
+                border-radius: 20px;
+                background: #000;
+                box-shadow: 
+                    0 0 0 4px #1a1a1a,
+                    0 0 50px rgba(220, 20, 60, 0.4),
+                    inset 0 0 100px rgba(0,0,0,0.9);
+                padding: 30px; /* 패딩을 조금 줄임 */
                 display: flex;
-                justify-content: center;
+                flex-direction: column; /* 세로 정렬 */
+                justify-content: space-between; /* 위아래 요소 분배 */
+                align-items: center;
+                overflow: hidden; /* 밖으로 나가는 것 방지 */
             }
 
-            .frame {
-                padding-right: 0;
-                margin-left: auto;
-                margin-right: auto;
-                display: block;
+            /* 상단 장식용 헤더 */
+            .monitor-header {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                padding: 0 10px 10px 10px;
+                border-bottom: 2px solid #333;
+                margin-bottom: 10px;
+                color: #ff3333;
+                text-shadow: 0 0 5px #ff3333;
+                font-size: 1.2rem;
+                letter-spacing: 2px;
+                flex-shrink: 0; /* 크기 줄어들지 않게 고정 */
+            }
+
+            .blink {
+                animation: blinker 1s linear infinite;
+            }
+            @keyframes blinker {
+                50% { opacity: 0; }
+            }
+
+            /* 캔버스 래퍼 (화면 안쪽) - 여기가 핵심 수정 */
+            .screen-wrapper {
+                position: relative;
+                width: 100%;
+                flex: 1; /* 남은 공간을 모두 차지하도록 설정 */
+                min-height: 0; /* Flex item이 내용물보다 작아질 수 있게 허용 */
+                overflow: hidden;
+                border: 2px solid #222;
+                border-radius: 4px;
+                box-shadow: inset 0 0 20px rgba(0,0,0,1);
+                background-color: #000;
             }
 
             canvas.frame {
-                background-color: black;
+                background-color: #000;
                 width: 100%;
-                height: auto;
-                object-fit: contain;
-                image-rendering: -moz-crisp-edges;
-                image-rendering: -webkit-crisp-edges;
+                height: 100%;
+                object-fit: contain; /* 비율 유지하며 짤리지 않게 */
                 image-rendering: pixelated;
-                image-rendering: crisp-edges;
+                display: block;
+                opacity: 0.9;
+            }
+
+            /* CRT 스캔라인 효과 */
+            .crt-overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                background: linear-gradient(
+                    to bottom,
+                    rgba(255,255,255,0),
+                    rgba(255,255,255,0) 50%,
+                    rgba(0,0,0,0.2) 50%,
+                    rgba(0,0,0,0.2)
+                );
+                background-size: 100% 4px;
+                z-index: 10;
+                box-shadow: inset 0 0 80px rgba(0,0,0,0.7);
+            }
+
+            /* 화면 반사광 효과 */
+            .crt-glare {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 40%);
+                z-index: 11;
+                border-radius: 4px;
             }
 
             #ascii-output {
                 display: none; 
             }
+            
+            /* 하단 장식 텍스트 */
+            .monitor-footer {
+                margin-top: 10px;
+                width: 100%;
+                text-align: right;
+                color: #555;
+                font-size: 0.9rem;
+                flex-shrink: 0; /* 크기 줄어들지 않게 고정 */
+            }
+
+            .noselect {
+                user-select: none;
+            }
         </style>
     </head>
     <body>
         <div id="container" class="noselect">
-            <!-- Hidden canvas for SDL (required for initialization) -->
-            <canvas id="sdl-canvas" style="display: none; width: 320px; height: 200px;"></canvas>
-            <!-- Visible canvas for ASCII rendering -->
-            <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+            <div class="monitor-header">
+                <span>DOOM_OS // VER 6.6.6</span>
+                <span><span class="blink">●</span> REC</span>
+            </div>
+
+            <div class="screen-wrapper">
+                <canvas id="sdl-canvas" style="display: none; width: 320px; height: 200px;"></canvas>
+                
+                <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+                
+                <div class="crt-overlay"></div>
+                <div class="crt-glare"></div>
+            </div>
+
             <pre id="ascii-output"></pre>
+            
+            <div class="monitor-footer">
+                SYSTEM: ONLINE | RENDERER: ASCII_WASM
+            </div>
         </div>
+
         <script>
             // 공통적으로 Doom 실행 시에 사용할 인자들
-            // - doom1.wad: 기본 WAD 파일
-            // - -window, -nogui, -nomusic 등: 웹 환경에 맞게 최소 옵션으로 실행
-            // - -force_software_renderer 1: WebGL 대신 소프트웨어 렌더러 사용 강제
             var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-force_software_renderer", "1"];
 
             var Module = {
@@ -107,7 +214,6 @@
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
                     console.error(text);
                 },
-                // SDL이 사용할 실제 캔버스 (숨겨져 있음)
                 canvas: document.getElementById("sdl-canvas"),
                 print: function (text) {
                     console.log(text);
@@ -118,9 +224,6 @@
             };
 
             function setupRenderer() {
-                    // WASM에서 export 한 함수들을 JS에서 호출하기 위해 cwrap 사용
-                    // ascii_get_buffer    : AsciiCell 버퍼의 포인터를 반환
-                    // ascii_get_buffer_size: AsciiCell 버퍼의 총 바이트 크기 반환
                     const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
                     const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
 
@@ -132,23 +235,19 @@
                     const canvas = document.getElementById('canvas');
                     const ctx = canvas.getContext('2d');
 
-                    // C 쪽에서 정의된 ASCII 해상도 (i_ascii.h 의 ASCII_WIDTH/HEIGHT)
                     const ASCII_WIDTH = 480;
                     const ASCII_HEIGHT = 160;
 
-                    // 사용자 요청에 따라 최종 캔버스 해상도 설정
                     const TARGET_CANVAS_WIDTH = 1600;
                     const TARGET_CANVAS_HEIGHT = 1200;
 
-                    // 각 아스키 문자 셀이 차지할 픽셀 크기 계산
                     const charWidth = TARGET_CANVAS_WIDTH / ASCII_WIDTH;
                     const charHeight = TARGET_CANVAS_HEIGHT / ASCII_HEIGHT;
 
-                    // 폰트 크기는 charHeight에 맞춰 설정 (소수점 폰트 크기는 일부 브라우저에서 렌더링 문제가 있을 수 있으므로 반올림)
                     const FONT_SIZE = Math.round(charHeight); 
                     const FONT = `${FONT_SIZE}px "Courier New", monospace`;
                     
-                    ctx.font = FONT; // 폰트 적용 (measureText는 이제 사용하지 않음)
+                    ctx.font = FONT; 
 
                     canvas.width = TARGET_CANVAS_WIDTH;
                     canvas.height = TARGET_CANVAS_HEIGHT;
@@ -156,8 +255,6 @@
                     console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
                     console.log(`Character cell size: ${charWidth}x${charHeight}`);
                 
-                // 현재 WASM 메모리 버퍼를 얻는 함수
-                // Emscripten 설정에 따라 HEAPU8 이나 wasmMemory 등 접근 방법이 달라질 수 있음
                 function getMemoryBuffer() {
                     if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) {
                         return HEAPU8.buffer;
@@ -171,15 +268,13 @@
                     return null;
                 }
 
-                // Test if we can access memory
                 const testBuffer = getMemoryBuffer();
                 if (!testBuffer) {
-                    console.error("Cannot access WASM memory buffer. Available properties:", Object.keys(Module));
+                    console.error("Cannot access WASM memory buffer.");
                     return;
                 }
                 console.log("Memory buffer access confirmed");
 
-                // 렌더링 프레임 수 및 디버깅용 타임스탬프
                 let frameCount = 0;
                 let lastLogTime = Date.now();
 
@@ -195,18 +290,14 @@
                             return;
                         }
 
-                        // Get fresh memory buffer each frame (may have been reallocated)
                         const heapBuffer = getMemoryBuffer();
                         if (!heapBuffer) {
                             console.error("Cannot access memory buffer");
                             return;
                         }
 
-                        // C++에서 만든 AsciiCell 배열(연속된 구조체 메모리)을 JS에서
-                        // 그대로 Uint8Array 로 바라본 뒤, 4바이트 단위로 파싱한다.
                         const buffer = new Uint8Array(heapBuffer, bufferPtr, bufferSize);
                         
-                        // Debug: Check if buffer has data
                         if (frameCount === 0 || Date.now() - lastLogTime > 2000) {
                             const sampleData = Array.from(buffer.slice(0, 20));
                             console.log("Buffer sample:", sampleData, "Size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
@@ -217,13 +308,6 @@
                             ctx.fillRect(0, 0, canvas.width, canvas.height);
                             ctx.font = FONT;
 
-                        // AsciiCell 구조체 레이아웃:
-                        //   char    character (1 byte)
-                        //   uint8_t r         (1 byte)
-                        //   uint8_t g         (1 byte)
-                        //   uint8_t b         (1 byte)
-                        // → 총 4 바이트가 한 글자 셀을 표현
-                        // 따라서 전체 버퍼 크기는 ASCII_WIDTH * ASCII_HEIGHT * 4 바이트가 되어야 함
                         const expectedSize = ASCII_WIDTH * ASCII_HEIGHT * 4;
                         if (buffer.length < expectedSize) {
                             if (frameCount % 60 === 0) {
@@ -231,7 +315,7 @@
                             }
                         }
 
-                            let i = 0;
+                        let i = 0;
                         let hasData = false;
                         let nonZeroCount = 0;
                         
@@ -239,19 +323,16 @@
                                 for (let x = 0; x < ASCII_WIDTH; x++) {
                                 if (i + 3 >= buffer.length) break;
                                 
-                                // Read AsciiCell: character, r, g, b
                                     const charCode = buffer[i];
                                     const r = buffer[i + 1];
                                     const g = buffer[i + 2];
                                     const b = buffer[i + 3];
 
-                                // Check if this cell has any data
                                 if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
                                     hasData = true;
                                     nonZeroCount++;
                                 }
 
-                                // Only render non-empty cells for better performance
                                 if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
                                     const char = charCode > 0 && charCode < 256 ? String.fromCharCode(charCode) : ' ';
                                     
@@ -278,7 +359,7 @@
                         }
                     }
 
-                    const renderInterval = setInterval(renderFrame, 16); // ~60 FPS
+                    const renderInterval = setInterval(renderFrame, 16); 
                     
                     callMain(commonArgs);
             }
