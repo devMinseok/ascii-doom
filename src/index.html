@@ -82,7 +82,7 @@
                 50% { opacity: 0; }
             }
 
-            /* 캔버스 래퍼 (화면 안쪽) - 여기가 핵심 수정 */
+            /* 캔버스 래퍼 (화면 안쪽) */
             .screen-wrapper {
                 position: relative;
                 width: 100%;
@@ -96,13 +96,14 @@
             }
 
             canvas.frame {
-                background-color: #000;
+                position: absolute;
+                top: 0;
+                left: 0;
                 width: 100%;
                 height: 100%;
-                object-fit: contain; /* 비율 유지하며 짤리지 않게 */
+                background-color: #000;
                 image-rendering: pixelated;
                 display: block;
-                opacity: 0.9;
             }
 
             /* CRT 스캔라인 효과 */
@@ -233,13 +234,23 @@
                     }
 
                     const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d');
+                    const ctx = canvas.getContext('2d', { alpha: false });  // 알파 채널 비활성화로 성능 향상
 
-                    const ASCII_WIDTH = 480;
-                    const ASCII_HEIGHT = 160;
+                    const ASCII_WIDTH = 240;
+                    const ASCII_HEIGHT = 80;
 
-                    const TARGET_CANVAS_WIDTH = 1600;
-                    const TARGET_CANVAS_HEIGHT = 1200;
+                    // wrapper 영역 크기 가져오기
+                    const screenWrapper = document.querySelector('.screen-wrapper');
+                    const wrapperRect = screenWrapper.getBoundingClientRect();
+                    
+                    // wrapper 전체를 캔버스로 채움 (비율 무시 - 게임 화면 짤림 방지)
+                    const canvasWidth = wrapperRect.width;
+                    const canvasHeight = wrapperRect.height;
+                    
+                    // devicePixelRatio 고려 (레티나 디스플레이 지원)
+                    const dpr = window.devicePixelRatio || 1;
+                    const TARGET_CANVAS_WIDTH = Math.round(canvasWidth * dpr);
+                    const TARGET_CANVAS_HEIGHT = Math.round(canvasHeight * dpr);
 
                     const charWidth = TARGET_CANVAS_WIDTH / ASCII_WIDTH;
                     const charHeight = TARGET_CANVAS_HEIGHT / ASCII_HEIGHT;
@@ -249,11 +260,12 @@
                     
                     ctx.font = FONT; 
 
+                    // 내부 해상도 설정 (DPR 반영)
                     canvas.width = TARGET_CANVAS_WIDTH;
                     canvas.height = TARGET_CANVAS_HEIGHT;
 
-                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height}`);
-                    console.log(`Character cell size: ${charWidth}x${charHeight}`);
+                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height} (Wrapper: ${Math.round(canvasWidth)}x${Math.round(canvasHeight)}, DPR: ${dpr})`);
+                    console.log(`Character cell size: ${charWidth.toFixed(1)}x${charHeight.toFixed(1)}`);
                 
                 function getMemoryBuffer() {
                     if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) {
@@ -298,60 +310,52 @@
 
                         const buffer = new Uint8Array(heapBuffer, bufferPtr, bufferSize);
                         
+                        // 디버그 로깅 (2초마다)
                         if (frameCount === 0 || Date.now() - lastLogTime > 2000) {
-                            const sampleData = Array.from(buffer.slice(0, 20));
-                            console.log("Buffer sample:", sampleData, "Size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
+                            console.log("Buffer size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
                             lastLogTime = Date.now();
                         }
-                            
-                            ctx.fillStyle = 'black';
-                            ctx.fillRect(0, 0, canvas.width, canvas.height);
-                            ctx.font = FONT;
+                        
+                        // 배경 클리어
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.font = FONT;
 
                         const expectedSize = ASCII_WIDTH * ASCII_HEIGHT * 4;
                         if (buffer.length < expectedSize) {
                             if (frameCount % 60 === 0) {
                                 console.warn(`Buffer size mismatch: got ${buffer.length}, expected ${expectedSize}`);
                             }
+                            return;
                         }
 
+                        // 최적화된 렌더링 루프
                         let i = 0;
-                        let hasData = false;
-                        let nonZeroCount = 0;
+                        const totalCells = ASCII_WIDTH * ASCII_HEIGHT;
                         
-                            for (let y = 0; y < ASCII_HEIGHT; y++) {
-                                for (let x = 0; x < ASCII_WIDTH; x++) {
-                                if (i + 3 >= buffer.length) break;
-                                
-                                    const charCode = buffer[i];
-                                    const r = buffer[i + 1];
-                                    const g = buffer[i + 2];
-                                    const b = buffer[i + 3];
+                        for (let y = 0; y < ASCII_HEIGHT; y++) {
+                            const yPos = y * charHeight + charHeight;
+                            
+                            for (let x = 0; x < ASCII_WIDTH; x++) {
+                                const charCode = buffer[i];
+                                const r = buffer[i + 1];
+                                const g = buffer[i + 2];
+                                const b = buffer[i + 3];
+                                i += 4;
 
-                                if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
-                                    hasData = true;
-                                    nonZeroCount++;
-                                }
-
-                                if (charCode !== 0 || r !== 0 || g !== 0 || b !== 0) {
-                                    const char = charCode > 0 && charCode < 256 ? String.fromCharCode(charCode) : ' ';
-                                    
+                                // 비어있지 않은 셀만 렌더링 (조건 체크 1회로 통합)
+                                if (charCode > 32 || r > 10 || g > 10 || b > 10) {
                                     ctx.fillStyle = `rgb(${r},${g},${b})`;
-                                    ctx.fillText(char, x * charWidth, y * charHeight + charHeight);
-                                }
-                                    
-                                    i += 4;
+                                    ctx.fillText(String.fromCharCode(charCode), x * charWidth, yPos);
                                 }
                             }
-                        
-                        if (frameCount % 60 === 0 && hasData) {
-                            console.log(`Rendering frame ${frameCount}, non-zero cells: ${nonZeroCount}/${ASCII_WIDTH * ASCII_HEIGHT}`);
                         }
                         
                         frameCount++;
                         
+                        // 첫 프레임 로깅
                         if (frameCount === 1) {
-                            console.log("First frame rendered, hasData:", hasData);
+                            console.log("First frame rendered successfully");
                         }
                         } catch (e) {
                             console.error("Error during canvas rendering:", e);

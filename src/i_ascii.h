@@ -27,9 +27,10 @@
 extern "C" {
 #endif
 
-// ASCII output dimensions (can be configured)
-#define ASCII_WIDTH  480
-#define ASCII_HEIGHT 160
+// ASCII output dimensions (optimized for performance)
+// 240x80 = 19,200 cells (vs 480x160 = 76,800 cells = 4x faster)
+#define ASCII_WIDTH  240
+#define ASCII_HEIGHT 80
 
 // Struct to hold data for one character cell
 typedef struct {
