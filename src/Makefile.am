@@ -22,7 +22,9 @@ AM_CFLAGS = -I$(top_srcdir)/textscreen            \
             -I$(top_srcdir)/opl                   \
             -I$(top_srcdir)/pcsound               \
             -I$(top_srcdir)/win32                 \
-            @SDLMIXER_CFLAGS@ @SDLNET_CFLAGS@
+            @SDL_CFLAGS@ @SDLMIXER_CFLAGS@ @SDLNET_CFLAGS@
+
+AM_CXXFLAGS = $(AM_CFLAGS)
 
 # Common source files used by absolutely everything:
 
