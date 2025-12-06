@@ -24,11 +24,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
-#include <algorithm>
-#include <string>
-#include <vector>
-#include <emscripten.h>
 #include <cmath>
+#include <algorithm>
+#include <emscripten.h>
 
 #if defined(__wasm_simd128__)
 #include <wasm_simd128.h>
@@ -39,15 +37,43 @@
 
 #define CELL_BUFFER_SIZE (ASCII_WIDTH * ASCII_HEIGHT)
 static AsciiCell cell_buffer[CELL_BUFFER_SIZE];
+
 // ASCII 렌더링이 초기화되었는지 여부를 나타내는 플래그
 static boolean ascii_initialized = false;
 
+// 감마 보정 룩업 테이블 (pow() 호출 제거로 성능 향상)
+static uint8_t gamma_table[256];
+static boolean gamma_table_initialized = false;
+
+// ASCII 문자 팔레트 (constexpr 배열로 최적화)
+static constexpr char ASCII_CHARS[] = " .:-=+*#%@";
+static constexpr int ASCII_CHARS_LEN = sizeof(ASCII_CHARS) - 1;  // null terminator 제외
+
 extern "C" {
+
+// 감마 테이블 초기화 (gamma = 0.35, 밝기 2배 증가)
+static void init_gamma_table(void)
+{
+    if (gamma_table_initialized)
+        return;
+    
+    // 감마 0.35 = 더 밝은 출력 (기존 0.5에서 약 2배 밝기)
+    constexpr float gamma = 0.35f;
+    for (int i = 0; i < 256; ++i) {
+        float normalized = i / 255.0f;
+        float corrected = std::pow(normalized, gamma);
+        gamma_table[i] = static_cast<uint8_t>(std::min(255.0f, corrected * 255.0f));
+    }
+    gamma_table_initialized = true;
+}
 
 void I_InitASCII(void)
 {
     if (ascii_initialized)
         return;
+    
+    // 감마 테이블 초기화 (최초 1회만)
+    init_gamma_table();
     
     // 전체 AsciiCell 버퍼를 0으로 초기화
     //  → 처음에는 화면 전체가 '빈 문자/검은색' 상태가 됨
@@ -70,40 +96,40 @@ const void* I_GetASCIIBuffer(void)
     return cell_buffer;
 }
 
-// C++ implementation of RGBA to AsciiCell data conversion
+// C++ implementation of RGBA to AsciiCell data conversion (optimized)
 void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer, 
                           int src_width, int src_height,
                           void *output_buffer,
                           int ascii_width, int ascii_height)
 {
-    // 화면 밝기에 따라 다른 문자를 사용하는 ASCII 팔레트
-    const std::string ascii_chars = " .:-=+*#%@";
-    // 출력으로 사용할 AsciiCell 배열
     AsciiCell* out_cells = static_cast<AsciiCell*>(output_buffer);
 
-    // ascii_width x ascii_height 해상도의 "문자 셀"로 원본 RGBA 화면을 축소 샘플링한다.
+    // 스케일 비율을 미리 계산 (나눗셈 최소화)
+    const int scale_x = (src_width << 8) / ascii_width;   // 8비트 고정소수점
+    const int scale_y = (src_height << 8) / ascii_height;
+
     for (int y = 0; y < ascii_height; ++y) {
+        const int src_y_start = (y * scale_y) >> 8;
+        const int src_y_end = ((y + 1) * scale_y) >> 8;
+        
         for (int x = 0; x < ascii_width; ++x) {
-            // 이 문자 셀이 담당하는 원본 화면 상의 영역을 계산
-            int src_x_start = (x * src_width) / ascii_width;
-            int src_y_start = (y * src_height) / ascii_height;
-            int src_x_end = ((x + 1) * src_width) / ascii_width;
-            int src_y_end = ((y + 1) * src_height) / ascii_height;
+            const int src_x_start = (x * scale_x) >> 8;
+            const int src_x_end = ((x + 1) * scale_x) >> 8;
             
-            // 해당 영역의 RGB 값을 모두 합산하여 평균 색/밝기를 구한다.
-            long long total_r = 0, total_g = 0, total_b = 0;
+            // 해당 영역의 RGB 값을 합산
+            int total_r = 0, total_g = 0, total_b = 0;
             int count = 0;
 
             for (int sy = src_y_start; sy < src_y_end; ++sy) {
                 const uint32_t* row_ptr = &rgba_buffer[sy * src_width + src_x_start];
-                int region_width = src_x_end - src_x_start;
+                const int region_width = src_x_end - src_x_start;
                 count += region_width;
 
 #if defined(__wasm_simd128__)
-                v128_t sums = wasm_i32x4_const(0, 0, 0, 0); // Accumulator for BGRA sums
+                v128_t sums = wasm_i32x4_const(0, 0, 0, 0);
                 int sx = 0;
                 for (; sx <= region_width - 4; sx += 4) {
-                    v128_t pixels = wasm_v128_load(row_ptr + sx); // Load 4 pixels (BGRA)
+                    v128_t pixels = wasm_v128_load(row_ptr + sx);
                     
                     v128_t wide_low = wasm_u16x8_extend_low_u8x16(pixels);
                     v128_t wide_high = wasm_u16x8_extend_high_u8x16(pixels);
@@ -119,14 +145,14 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                 total_r += wasm_i32x4_extract_lane(sums, 2);
 
                 for (; sx < region_width; ++sx) {
-                    uint32_t pixel = row_ptr[sx];
+                    const uint32_t pixel = row_ptr[sx];
                     total_r += (pixel >> 16) & 0xFF;
                     total_g += (pixel >> 8) & 0xFF;
                     total_b += pixel & 0xFF;
                 }
 #else 
-                for (int sx = src_x_start; sx < src_x_end; ++sx) {
-                    uint32_t pixel = rgba_buffer[sy * src_width + sx];
+                for (int sx = 0; sx < region_width; ++sx) {
+                    const uint32_t pixel = row_ptr[sx];
                     total_r += (pixel >> 16) & 0xFF;
                     total_g += (pixel >> 8) & 0xFF;
                     total_b += pixel & 0xFF;
@@ -134,11 +160,9 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
 #endif
             }
             
-            // 2D 좌표 (x, y) 를 1D 인덱스로 변환해서 AsciiCell 에 기록
             AsciiCell& cell = out_cells[y * ascii_width + x];
 
             if (count == 0) {
-                // 샘플링할 픽셀이 하나도 없으면 공백 문자 + 검은색으로 채움
                 cell.character = ' ';
                 cell.r = 0;
                 cell.g = 0;
@@ -146,23 +170,22 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                 continue;
             }
             
-            // 영역 내 평균 색상 계산
-            int avg_r = total_r / count;
-            int avg_g = total_g / count;
-            int avg_b = total_b / count;
+            // 평균 계산
+            const int avg_r = total_r / count;
+            const int avg_g = total_g / count;
+            const int avg_b = total_b / count;
             
-            // 가중치를 적용해 '밝기' 값으로 변환 (0~255)
-            int brightness = (avg_r * 299 + avg_g * 587 + avg_b * 114) / 1000;
+            // 밝기 계산 (정수 연산)
+            const int brightness = (avg_r * 299 + avg_g * 587 + avg_b * 114) / 1000;
             
-            // 밝기를 ascii_chars 인덱스로 매핑
-            int char_idx = (brightness * (ascii_chars.length() - 1)) / 255;
+            // ASCII 문자 인덱스 계산 (constexpr 배열 사용)
+            const int char_idx = (brightness * (ASCII_CHARS_LEN - 1)) / 255;
 
-            // 최종적으로 이 셀에 사용할 문자/색상 값을 저장
-            cell.character = ascii_chars[char_idx];
-            const float gamma = 0.5;
-            cell.r = std::min(255, static_cast<int>(pow(avg_r / 255.0, gamma) * 255.0));
-            cell.g = std::min(255, static_cast<int>(pow(avg_g / 255.0, gamma) * 255.0));
-            cell.b = std::min(255, static_cast<int>(pow(avg_b / 255.0, gamma) * 255.0));
+            // 감마 룩업 테이블 사용 (pow() 호출 제거)
+            cell.character = ASCII_CHARS[char_idx];
+            cell.r = gamma_table[avg_r];
+            cell.g = gamma_table[avg_g];
+            cell.b = gamma_table[avg_b];
         }
     }
 }
