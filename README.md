@@ -4,6 +4,54 @@
 
 Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
 
+
+## 🗂️ 프로젝트 정리
+
+1. 팀 소개
+   - 팀명: FC온라인
+   - 팀장: 👑김철준   
+   - 팀원: 강민석, 김문선
+
+2. 프로젝트 개요 및 주요 기능  
+   - Doom 렌더링을 ASCII 아트로 변환해 브라우저에서 플레이.  
+   - 주요 기능: WebAssembly 기반 실행, SDL2 입출력 브릿지, 실시간 픽셀→ASCII 변환, WAD 로드 및 캐시, 키보드 입력 처리.
+
+3. 실행 및 플레이 방법
+
+   ⌨️ 조작키
+   | 동작 | 키 |
+   |------|-----|
+   | 이동 | 방향키 (↑↓←→) |
+   | 공격 | `A` |
+   | 상호작용 | `S` |
+
+    - 로컬 실행: [🔨 Build](#-build) 섹션 참고
+    - GitHub Pages: https://devMinseok.github.io/ascii-doom/
+
+4. 역할 분담  
+   - 강민석: 전체 구조 설계  
+   - 김문선: UI 설계  
+   - 김철준: 아스키 그래픽 변환 로직 설계
+
+5. 개발 중 어려웠던 점과 해결 방법  
+   - 팔레트/감마: 원본 팔레트와 ASCII 밝기 스케일이 달라 어둡게 보임 → 감마 LUT(0.35)와 밝기→문자 LUT(idxLUT) 재조정.  
+   - 해상도 스케일링: 셀 단위 다운샘플 시 계단/깨짐 → 적분영상 + 박스필터 평균으로 셀 컬러 추출.  
+   - 메모리/성능: 프레임마다 동적 할당이 있어 힙 성장 → 프리할로케이션 버퍼(temp_r/g/b 등)와 역수 LUT로 나눗셈 제거.  
+   - SIMD 호환: 일부 환경에서 SIMD 미지원 → JS 버튼으로 SIMD ON/OFF 토글, 벤치마크 패널에서 두 모드 모두 측정.
+
+6. 가산점 항목으로 생각하는 부분
+   - SIMD 최적화 시도: WASM SIMD로 픽셀 => 밝기 변환 루프를 벡터화, 16바이트 정렬 버퍼로 로드/스토어 정리.  
+   - 병목: 문자 매핑 테이블 접근이 스칼라라서 이득이 제한됨.  
+   - 결과: 7번 Latency 측정 테이블을 참고.
+
+7. Latency 측정 테이블  
+   | 시나리오 | 평균(ms) | P95(ms) | 환경/비고 |
+   |----------|----------|---------|-----------|
+   |          |          |         |           |
+   |          |          |         |           |
+
+
+
 ## 🎮 특징
 
 - 🌐 **브라우저에서 바로 실행**: 별도 설치 없이 웹 브라우저에서 바로 플레이
@@ -11,6 +59,7 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
 - 📦 **WebAssembly 기반**: 네이티브에 가까운 성능으로 실행
 - 🚀 **자동 배포**: GitHub Actions를 통한 CI/CD 파이프라인
 - 🐳 **Docker 기반 빌드**: 일관된 빌드 환경 제공
+
 
 ## 🛠️ 기술 스택
 
@@ -42,11 +91,11 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
 
 ```text
 C/C++ 소스 코드 (Chocolate Doom)
-    ↓
+      ↓
 Emscripten 컴파일러 (emcc)
-    ↓
+      ↓
 WebAssembly (.wasm) + JavaScript (.js) + HTML (.html)
-    ↓
+      ↓
 브라우저에서 실행
 ```
 
@@ -69,36 +118,49 @@ WebAssembly (.wasm) + JavaScript (.js) + HTML (.html)
 
 ### 아키텍처
 
+```mermaid
+flowchart TB
+  subgraph browser["Web Browser"]
+    ui["HTML / JS<br/>UI & Controls"]
+    canvas["Canvas / Audio / Inputs<br/>(브라우저 API)"]
+  end
+
+  subgraph wasm["WASM (Emscripten)"]
+    logic["게임 로직 (C)<br/>Chocolate Doom"]
+    ascii["ASCII 렌더링 엔진 (C++)<br/>i_ascii.cpp · 픽셀→문자 매핑"]
+    sdl["SDL2 포팅 레이어<br/>브라우저 API 브릿지"]
+    fs["Emscripten FS<br/>WAD / Saves (IndexedDB 백엔드)"]
+  end
+
+  ui <--> logic
+  logic --> ascii
+  ascii --> sdl
+  logic --> sdl
+  sdl <--> canvas
+  logic <--> fs
+  ascii --> fs
+```
+
+### ASCII 그래픽 변환 흐름
+
 ```text
-┌─────────────────┐
-│  Web Browser    │
-│  ┌───────────┐  │
-│  │  HTML/JS  │  │ ← 사용자 인터페이스
-│  └─────┬─────┘  │
-│        │        │
-│  ┌─────▼─────────────────┐
-│  │  WASM (WebAssembly)    │
-│  │  ┌─────────────────┐   │
-│  │  │ 게임 로직 (C)    │   │ ← Chocolate Doom 엔진
-│  │  └───────┬─────────┘   │
-│  │          │             │
-│  │  ┌───────▼─────────┐   │
-│  │  │ ASCII 렌더링    │   │ ← i_ascii.cpp (C++)
-│  │  │ 엔진            │   │   픽셀 → ASCII 변환
-│  │  └───────┬─────────┘   │
-│  └──────────┼─────────────┘
-│             │
-│  ┌──────────▼─────────┐
-│  │  SDL2              │  │ ← 브라우저 API 브릿지
-│  │  (Canvas API)      │  │
-│  └────────────────────┘  │
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  Emscripten FS            │ ← 가상 파일 시스템
-│  (WAD files)              │   (IndexedDB 백엔드)
-└──────────────────────────┘
+SDL Framebuffer (RGBA32) 입력
+      ↓
+`build_integral_images`: R/G/B 적분영상 생성 (누적합)
+      ↓
+셀 경계/카운트 계산: X0/X1/Y0/Y1/INV_COUNT
+      ↓
+패스1: 적분영상에서 RGB 평균 → `temp_r/g/b` (곱셈+시프트로 나눗셈 제거)
+      ↓
+패스2: 밝기 계산 (SIMD/스칼라) `Y=(r*299+g*587+b*114)>>10`
+      ↓
+감마 보정: `gamma_table` LUT (GAMMA=0.35)
+      ↓
+밝기→문자 매핑: `idxLUT` + `ASCII_CHARS[]`
+      ↓
+`AsciiCell{char,r,g,b}`에 기록
+      ↓
+JS가 HEAPU8 버퍼를 읽어 Canvas `fillText`로 렌더
 ```
 
 ## 📋 Prerequisites
@@ -112,7 +174,7 @@ WebAssembly (.wasm) + JavaScript (.js) + HTML (.html)
 
 ### Dev Container 사용 (권장)
 
-**VS Code 또는 Cursor에서:**
+**VSCode:**
 
 1. 프로젝트 열기
 2. 명령 팔레트 (`Cmd+Shift+P` / `Ctrl+Shift+P`)
@@ -159,29 +221,6 @@ python3 -m http.server 8000
 ```
 
 브라우저에서 `http://localhost:8000` 열기
-
-**Note**: 게임을 실행하려면 WAD 파일(`doom1.wad`, `doom2.wad` 등)이 필요합니다. 각 게임 HTML 파일의 `preRun` 섹션을 수정하거나, `index.html`을 사용하여 WAD 파일을 미리 로드할 수 있습니다.
-
-## 📤 Deploy to GitHub Pages
-
-GitHub Actions가 자동으로 빌드하고 배포합니다.
-
-### Setup
-
-1. Repository Settings → Pages
-2. Source: **"GitHub Actions"** 선택
-3. `main` 브랜치에 push하면 자동 배포
-
-사이트는 `https://github.com/devMinseok/ascii-doom`에서 확인할 수 있습니다.
-
-
-## ⌨️ 조작키
-
-| 동작 | 키 |
-|------|-----|
-| 이동 | 방향키 (↑↓←→) |
-| 공격 | `A` |
-| 문 열기 | `S` |
 
 ## 📚 참고 자료
 
