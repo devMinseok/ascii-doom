@@ -24,7 +24,5 @@ TARGET_OS = @TARGET_OS@
 # Documentation files to distribute with packages.
 
 DOC_FILES = README.md        \
-            README.Music.md  \
-            COPYING.md       \
-            NEWS.md
+            COPYING.md
 
