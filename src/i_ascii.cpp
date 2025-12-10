@@ -56,6 +56,14 @@ static bool lut_initialized = false;
 static uint32_t g_ascii_frame_id = 0;
 static double   g_ascii_last_ms  = 0.0;
 
+// 1초 윈도우 FPS 계산용
+static double fps_window_start_simd_on = 0.0;
+static double fps_window_start_simd_off = 0.0;
+static uint32_t fps_frame_count_simd_on = 0;
+static uint32_t fps_frame_count_simd_off = 0;
+static double current_fps_simd_on = 0.0;
+static double current_fps_simd_off = 0.0;
+
 // ===== 적분영상/경계 버퍼 =====
 static uint32_t *I_R = nullptr, *I_G = nullptr, *I_B = nullptr; // (src_w+1)*(src_h+1)
 static int I_W = 0, I_H = 0; // integral dims
@@ -214,10 +222,13 @@ static void build_integral_images(const uint32_t *rgba, int w, int h) {
 static void ensure_temp_buffer(int size) {
     if (temp_size >= size) return;
     free(temp_r); free(temp_g); free(temp_b);
-    // 16바이트 정렬 (SIMD)
-    temp_r = (uint16_t*)aligned_alloc(16, sizeof(uint16_t) * size);
-    temp_g = (uint16_t*)aligned_alloc(16, sizeof(uint16_t) * size);
-    temp_b = (uint16_t*)aligned_alloc(16, sizeof(uint16_t) * size);
+    // 16바이트 정렬 (SIMD) - size를 alignment의 배수로 올림
+    constexpr size_t alignment = 16;
+    size_t byte_size = sizeof(uint16_t) * size;
+    size_t aligned_size = (byte_size + alignment - 1) & ~(alignment - 1);
+    temp_r = (uint16_t*)aligned_alloc(alignment, aligned_size);
+    temp_g = (uint16_t*)aligned_alloc(alignment, aligned_size);
+    temp_b = (uint16_t*)aligned_alloc(alignment, aligned_size);
     temp_size = size;
 }
 
@@ -358,7 +369,8 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
 
     // 벤치마크 모드일 때 시간 측정 및 통계 업데이트
     if (benchmark_mode) {
-        double elapsed_ms = emscripten_get_now() - start_time;
+        double now = emscripten_get_now();
+        double elapsed_ms = now - start_time;
         BenchmarkStats* stats = use_simd ? &stats_simd_on : &stats_simd_off;
         
         stats->frame_count++;
@@ -374,6 +386,33 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                 if (elapsed_ms < stats->min_time_ms) stats->min_time_ms = elapsed_ms;
                 if (elapsed_ms > stats->max_time_ms) stats->max_time_ms = elapsed_ms;
                 stats->avg_time_ms = stats->total_time_ms / measured_frames;
+            }
+        }
+        
+        // 1초 윈도우 FPS 계산
+        if (use_simd) {
+            fps_frame_count_simd_on++;
+            if (fps_window_start_simd_on == 0.0) {
+                fps_window_start_simd_on = now;
+            } else {
+                double window_elapsed = now - fps_window_start_simd_on;
+                if (window_elapsed >= 1000.0) {
+                    current_fps_simd_on = (fps_frame_count_simd_on * 1000.0) / window_elapsed;
+                    fps_frame_count_simd_on = 0;
+                    fps_window_start_simd_on = now;
+                }
+            }
+        } else {
+            fps_frame_count_simd_off++;
+            if (fps_window_start_simd_off == 0.0) {
+                fps_window_start_simd_off = now;
+            } else {
+                double window_elapsed = now - fps_window_start_simd_off;
+                if (window_elapsed >= 1000.0) {
+                    current_fps_simd_off = (fps_frame_count_simd_off * 1000.0) / window_elapsed;
+                    fps_frame_count_simd_off = 0;
+                    fps_window_start_simd_off = now;
+                }
             }
         }
     }
@@ -433,6 +472,13 @@ void ascii_set_benchmark_mode(int enabled) {
         // 통계 리셋 (워밍업 포함)
         stats_simd_on = {0, 0, 0.0, 1e9, 0.0, 0.0};
         stats_simd_off = {0, 0, 0.0, 1e9, 0.0, 0.0};
+        // FPS 윈도우 리셋
+        fps_window_start_simd_on = 0.0;
+        fps_window_start_simd_off = 0.0;
+        fps_frame_count_simd_on = 0;
+        fps_frame_count_simd_off = 0;
+        current_fps_simd_on = 0.0;
+        current_fps_simd_off = 0.0;
     }
 }
 
@@ -445,6 +491,13 @@ EMSCRIPTEN_KEEPALIVE
 void ascii_reset_benchmark_stats(void) {
     stats_simd_on = {0, 0, 0.0, 1e9, 0.0, 0.0};
     stats_simd_off = {0, 0, 0.0, 1e9, 0.0, 0.0};
+    // FPS 윈도우 리셋
+    fps_window_start_simd_on = 0.0;
+    fps_window_start_simd_off = 0.0;
+    fps_frame_count_simd_on = 0;
+    fps_frame_count_simd_off = 0;
+    current_fps_simd_on = 0.0;
+    current_fps_simd_off = 0.0;
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -468,6 +521,11 @@ EMSCRIPTEN_KEEPALIVE
 double ascii_get_benchmark_max_time_simd_off(void) { return stats_simd_off.max_time_ms; }
 EMSCRIPTEN_KEEPALIVE
 double ascii_get_benchmark_avg_time_simd_off(void) { return stats_simd_off.avg_time_ms; }
+
+EMSCRIPTEN_KEEPALIVE
+double ascii_get_current_fps_simd_on(void) { return current_fps_simd_on; }
+EMSCRIPTEN_KEEPALIVE
+double ascii_get_current_fps_simd_off(void) { return current_fps_simd_off; }
 
 } // extern "C"
 

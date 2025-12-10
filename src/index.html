@@ -33,18 +33,14 @@
         <div id="benchmark-current-mode">Testing: SIMD ON</div>
         <div class="benchmark-stats">
           <h4>SIMD ON</h4>
-          <div class="stat-row"><span class="stat-label">FPS (Avg):</span><span class="stat-value" id="bench-simd-on-fps-avg">0.00</span></div>
-          <div class="stat-row"><span class="stat-label">FPS (Min):</span><span class="stat-value" id="bench-simd-on-fps-min">0.00</span></div>
-          <div class="stat-row"><span class="stat-label">FPS (Max):</span><span class="stat-value" id="bench-simd-on-fps-max">0.00</span></div>
+          <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-on-fps-current">0.00</span></div>
           <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-on-latency-avg">0.00 ms</span></div>
           <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-on-latency-min">0.00 ms</span></div>
           <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-on-latency-max">0.00 ms</span></div>
         </div>
         <div class="benchmark-stats">
           <h4>SIMD OFF</h4>
-          <div class="stat-row"><span class="stat-label">FPS (Avg):</span><span class="stat-value" id="bench-simd-off-fps-avg">0.00</span></div>
-          <div class="stat-row"><span class="stat-label">FPS (Min):</span><span class="stat-value" id="bench-simd-off-fps-min">0.00</span></div>
-          <div class="stat-row"><span class="stat-label">FPS (Max):</span><span class="stat-value" id="bench-simd-off-fps-max">0.00</span></div>
+          <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-off-fps-current">0.00</span></div>
           <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-off-latency-avg">0.00 ms</span></div>
           <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-off-latency-min">0.00 ms</span></div>
           <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-off-latency-max">0.00 ms</span></div>
@@ -107,6 +103,10 @@
         const getBenchMinTimeOff = Module.cwrap('ascii_get_benchmark_min_time_simd_off', 'number', []);
         const getBenchMaxTimeOff = Module.cwrap('ascii_get_benchmark_max_time_simd_off', 'number', []);
         const getBenchAvgTimeOff = Module.cwrap('ascii_get_benchmark_avg_time_simd_off', 'number', []);
+        
+        // 1초 윈도우 FPS 조회 함수들
+        const getCurrentFpsOn = Module.cwrap('ascii_get_current_fps_simd_on', 'number', []);
+        const getCurrentFpsOff = Module.cwrap('ascii_get_current_fps_simd_off', 'number', []);
 
         if (!getBufferPtr || !getBufferSize) { console.error("Failed to wrap WASM buffer functions."); return; }
 
@@ -189,20 +189,18 @@
 
           // SIMD ON 통계
           const statsOn = {
-            frameCount: getBenchFrameCountOn(),
-            totalTime: getBenchTotalTimeOn(),
             minTime: getBenchMinTimeOn(),
             maxTime: getBenchMaxTimeOn(),
-            avgTime: getBenchAvgTimeOn()
+            avgTime: getBenchAvgTimeOn(),
+            currentFps: getCurrentFpsOn()
           };
 
           // SIMD OFF 통계
           const statsOff = {
-            frameCount: getBenchFrameCountOff(),
-            totalTime: getBenchTotalTimeOff(),
             minTime: getBenchMinTimeOff(),
             maxTime: getBenchMaxTimeOff(),
-            avgTime: getBenchAvgTimeOff()
+            avgTime: getBenchAvgTimeOff(),
+            currentFps: getCurrentFpsOff()
           };
 
           // UI 업데이트 - SIMD ON
@@ -210,9 +208,7 @@
           const maxTimeOn = statsOn.maxTime;
           const avgTimeOn = statsOn.avgTime;
           
-          document.getElementById('bench-simd-on-fps-avg').textContent = (avgTimeOn > 0 ? (1000.0 / avgTimeOn).toFixed(2) : '0.00');
-          document.getElementById('bench-simd-on-fps-min').textContent = (maxTimeOn > 0 ? (1000.0 / maxTimeOn).toFixed(2) : '0.00');
-          document.getElementById('bench-simd-on-fps-max').textContent = (minTimeOn > 0 ? (1000.0 / minTimeOn).toFixed(2) : '0.00');
+          document.getElementById('bench-simd-on-fps-current').textContent = statsOn.currentFps.toFixed(2);
           document.getElementById('bench-simd-on-latency-avg').textContent = avgTimeOn.toFixed(2) + ' ms';
           document.getElementById('bench-simd-on-latency-min').textContent = minTimeOn.toFixed(2) + ' ms';
           document.getElementById('bench-simd-on-latency-max').textContent = maxTimeOn.toFixed(2) + ' ms';
@@ -222,9 +218,7 @@
           const maxTimeOff = statsOff.maxTime;
           const avgTimeOff = statsOff.avgTime;
           
-          document.getElementById('bench-simd-off-fps-avg').textContent = (avgTimeOff > 0 ? (1000.0 / avgTimeOff).toFixed(2) : '0.00');
-          document.getElementById('bench-simd-off-fps-min').textContent = (maxTimeOff > 0 ? (1000.0 / maxTimeOff).toFixed(2) : '0.00');
-          document.getElementById('bench-simd-off-fps-max').textContent = (minTimeOff > 0 ? (1000.0 / minTimeOff).toFixed(2) : '0.00');
+          document.getElementById('bench-simd-off-fps-current').textContent = statsOff.currentFps.toFixed(2);
           document.getElementById('bench-simd-off-latency-avg').textContent = avgTimeOff.toFixed(2) + ' ms';
           document.getElementById('bench-simd-off-latency-min').textContent = minTimeOff.toFixed(2) + ' ms';
           document.getElementById('bench-simd-off-latency-max').textContent = maxTimeOff.toFixed(2) + ' ms';
@@ -272,7 +266,6 @@
 
         // 렌더 루프
         function renderFrame() {
-          
           // 벤치마크 모드일 때 SIMD ON/OFF 전환
           if (benchmarkMode) {
             benchmarkFrameCounter++;
