@@ -1,377 +1,339 @@
 <!DOCTYPE html>
 <html lang="en-us">
-    <head>
-        <title>Websockets Doom - TERMINAL</title>
-        <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
-        <style>
-            @font-face {
-                font-family: "VT323";
-                font-style: normal;
-                font-weight: 400;
-                src: url(https://fonts.gstatic.com/s/vt323/v12/pxiKyp0ihIEF2isfFJXUdVNF.woff2) format("woff2");
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }
+  <head>
+    <meta charset="utf-8" />
+    <title>DOOM_ASCII — TERMINAL</title>
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="container" class="noselect">
+      <div class="monitor-header">
+        <span></span>
+        <span>DOOM_ASCII // VER 1.0.0</span>
+      </div>
 
-            * {
-                box-sizing: border-box;
-            }
+      <div class="screen-wrapper">
+        <canvas id="sdl-canvas" style="display:none; width:240px; height:80px;"></canvas>
+        <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+        <div class="crt-overlay"></div>
+        <div class="crt-glare"></div>
+      </div>
 
-            html {
-                font-family: "VT323", monospace;
-                font-size: 16px;
-                height: 100%;
-                overflow: hidden;
-            }
+      <pre id="ascii-output"></pre>
 
-            body {
-                background-color: #050505;
-                background-image: 
-                    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-                    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(255, 0, 0, 0.02));
-                background-size: 100% 2px, 3px 100%;
-                margin: 0;
-                padding: 0;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                color: #d32f2f;
-            }
+      <div class="monitor-footer">
+        SYSTEM: ONLINE | RENDERER: ASCII_WASM |
+        <button id="simd-toggle" class="control-button control-button--simd">SIMD: ON</button>
+        <button id="benchmark-toggle" class="control-button control-button--benchmark">BENCHMARK: OFF</button>
+      </div>
 
-            /* 모니터 전체 프레임 */
-            #container {
-                position: relative;
-                width: 95vw;
-                max-width: 1600px;
-                height: 90vh; /* 높이를 화면의 90%로 고정 */
-                aspect-ratio: 4/3;
-                border: 4px solid #444;
-                border-radius: 20px;
-                background: #000;
-                box-shadow: 
-                    0 0 0 4px #1a1a1a,
-                    0 0 50px rgba(220, 20, 60, 0.4),
-                    inset 0 0 100px rgba(0,0,0,0.9);
-                padding: 30px; /* 패딩을 조금 줄임 */
-                display: flex;
-                flex-direction: column; /* 세로 정렬 */
-                justify-content: space-between; /* 위아래 요소 분배 */
-                align-items: center;
-                overflow: hidden; /* 밖으로 나가는 것 방지 */
-            }
-
-            /* 상단 장식용 헤더 */
-            .monitor-header {
-                width: 100%;
-                display: flex;
-                justify-content: space-between;
-                padding: 0 10px 10px 10px;
-                border-bottom: 2px solid #333;
-                margin-bottom: 10px;
-                color: #ff3333;
-                text-shadow: 0 0 5px #ff3333;
-                font-size: 1.2rem;
-                letter-spacing: 2px;
-                flex-shrink: 0; /* 크기 줄어들지 않게 고정 */
-            }
-
-            .blink {
-                animation: blinker 1s linear infinite;
-            }
-            @keyframes blinker {
-                50% { opacity: 0; }
-            }
-
-            /* 캔버스 래퍼 (화면 안쪽) */
-            .screen-wrapper {
-                position: relative;
-                width: 100%;
-                flex: 1; /* 남은 공간을 모두 차지하도록 설정 */
-                min-height: 0; /* Flex item이 내용물보다 작아질 수 있게 허용 */
-                overflow: hidden;
-                border: 2px solid #222;
-                border-radius: 4px;
-                box-shadow: inset 0 0 20px rgba(0,0,0,1);
-                background-color: #000;
-            }
-
-            canvas.frame {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: #000;
-                image-rendering: pixelated;
-                display: block;
-            }
-
-            /* CRT 스캔라인 효과 */
-            .crt-overlay {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-                background: linear-gradient(
-                    to bottom,
-                    rgba(255,255,255,0),
-                    rgba(255,255,255,0) 50%,
-                    rgba(0,0,0,0.2) 50%,
-                    rgba(0,0,0,0.2)
-                );
-                background-size: 100% 4px;
-                z-index: 10;
-                box-shadow: inset 0 0 80px rgba(0,0,0,0.7);
-            }
-
-            /* 화면 반사광 효과 */
-            .crt-glare {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-                background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 40%);
-                z-index: 11;
-                border-radius: 4px;
-            }
-
-            #ascii-output {
-                display: none; 
-            }
-            
-            /* 하단 장식 텍스트 */
-            .monitor-footer {
-                margin-top: 10px;
-                width: 100%;
-                text-align: right;
-                color: #555;
-                font-size: 0.9rem;
-                flex-shrink: 0; /* 크기 줄어들지 않게 고정 */
-            }
-
-            .noselect {
-                user-select: none;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="container" class="noselect">
-            <div class="monitor-header">
-                <span>DOOM_OS // VER 6.6.6</span>
-                <span><span class="blink">●</span> REC</span>
-            </div>
-
-            <div class="screen-wrapper">
-                <canvas id="sdl-canvas" style="display: none; width: 320px; height: 200px;"></canvas>
-                
-                <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
-                
-                <div class="crt-overlay"></div>
-                <div class="crt-glare"></div>
-            </div>
-
-            <pre id="ascii-output"></pre>
-            
-            <div class="monitor-footer">
-                SYSTEM: ONLINE | RENDERER: ASCII_WASM
-            </div>
+      <div id="benchmark-panel">
+        <h3>BENCHMARK MODE</h3>
+        <div id="benchmark-current-mode">Testing: SIMD ON</div>
+        <div class="benchmark-stats">
+          <h4>SIMD ON</h4>
+          <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-on-fps-current">0.00</span></div>
+          <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-on-latency-avg">0.00 ms</span></div>
+          <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-on-latency-min">0.00 ms</span></div>
+          <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-on-latency-max">0.00 ms</span></div>
         </div>
+        <div class="benchmark-stats">
+          <h4>SIMD OFF</h4>
+          <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-off-fps-current">0.00</span></div>
+          <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-off-latency-avg">0.00 ms</span></div>
+          <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-off-latency-min">0.00 ms</span></div>
+          <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-off-latency-max">0.00 ms</span></div>
+        </div>
+      </div>
+    </div>
 
-        <script>
-            // 공통적으로 Doom 실행 시에 사용할 인자들
-            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-force_software_renderer", "1"];
+    <!-- chocolate-doom.js (emscripten output) -->
+    <script async type="text/javascript" src="chocolate-doom.js"></script>
 
-            var Module = {
-                onRuntimeInitialized: () => {
-                    console.log("Module initialized, setting up canvas renderer...");
+    <script>
+      // Doom args
+      const commonArgs = ["-iwad","doom1.wad","-window","-nogui","-nomusic","-config","default.cfg","-servername","doomflare","-force_software_renderer","1"];
 
-                    // Hide SDL canvas and any canvas that Emscripten might have created automatically
-                    const sdlCanvas = document.getElementById("sdl-canvas");
-                    if (sdlCanvas) {
-                        sdlCanvas.style.display = "none";
-                    }
-                    const canvases = document.querySelectorAll("canvas");
-                    canvases.forEach(canvas => {
-                        if (canvas.id !== "canvas") {
-                            canvas.style.display = "none";
-                        }
-                    });
-                    
-                    // Wait a bit for HEAPU8 to be fully initialized
-                    setTimeout(() => {
-                        setupRenderer();
-                    }, 100);
-                },
-                noInitialRun: true,
-                preRun: () => {
-                    Module.FS.createPreloadedFile("", "doom1.wad", "doom1.wad", true, true);
-                    Module.FS.createPreloadedFile("", "default.cfg", "default.cfg", true, true);
-                },
-                printErr: function (text) {
-                    if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
-                    console.error(text);
-                },
-                canvas: document.getElementById("sdl-canvas"),
-                print: function (text) {
-                    console.log(text);
-                },
-                setStatus: function (text) {
-                    console.log(text);
-                }
-            };
+      // JS/WASM 해상도 (i_ascii.h의 ASCII_WIDTH/HEIGHT와 반드시 동일)
+      const ASCII_WIDTH  = 240;
+      const ASCII_HEIGHT = 80;
 
-            function setupRenderer() {
-                    const getBufferPtr = Module.cwrap('ascii_get_buffer', 'number', []);
-                    const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
+      // Emscripten module
+      var Module = {
+        onRuntimeInitialized: () => {
+          const sdlCanvas = document.getElementById("sdl-canvas");
+          if (sdlCanvas) sdlCanvas.style.display = "none";
+          // 다른 캔버스도 숨기고 우리가 쓰는 것만 보이게
+          document.querySelectorAll("canvas").forEach(c => { if (c.id !== "canvas") c.style.display = "none"; });
+          setTimeout(setupRenderer, 100);
+        },
+        noInitialRun: true,
+        preRun: () => {
+          Module.FS.createPreloadedFile("", "doom1.wad", "doom1.wad", true, true);
+          Module.FS.createPreloadedFile("", "default.cfg", "default.cfg", true, true);
+        },
+        printErr: function (text) { if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" "); console.error(text); },
+        print:    function (text) { },
+        setStatus:function (text) { },
+        canvas: document.getElementById("sdl-canvas"),
+      };
 
-                    if (!getBufferPtr || !getBufferSize) {
-                        console.error("Failed to wrap WASM buffer functions.");
-                        return;
-                    }
+      function setupRenderer() {
+        // WASM exports
+        const getBufferPtr  = Module.cwrap('ascii_get_buffer', 'number', []);
+        const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
+        const setSimd       = Module.cwrap('ascii_set_simd', null, ['number']);
+        const getSimd       = Module.cwrap('ascii_get_simd', 'number', []);
+        const simdSupported = Module.cwrap('ascii_simd_supported', 'number', []);
+        const setBenchmarkMode = Module.cwrap('ascii_set_benchmark_mode', null, ['number']);
+        const getBenchmarkMode = Module.cwrap('ascii_get_benchmark_mode', 'number', []);
+        const resetBenchmarkStats = Module.cwrap('ascii_reset_benchmark_stats', null, []);
+        
+        // 벤치마크 통계 조회 함수들 (SIMD ON)
+        const getBenchFrameCountOn = Module.cwrap('ascii_get_benchmark_frame_count_simd_on', 'number', []);
+        const getBenchTotalTimeOn = Module.cwrap('ascii_get_benchmark_total_time_simd_on', 'number', []);
+        const getBenchMinTimeOn = Module.cwrap('ascii_get_benchmark_min_time_simd_on', 'number', []);
+        const getBenchMaxTimeOn = Module.cwrap('ascii_get_benchmark_max_time_simd_on', 'number', []);
+        const getBenchAvgTimeOn = Module.cwrap('ascii_get_benchmark_avg_time_simd_on', 'number', []);
+        
+        // 벤치마크 통계 조회 함수들 (SIMD OFF)
+        const getBenchFrameCountOff = Module.cwrap('ascii_get_benchmark_frame_count_simd_off', 'number', []);
+        const getBenchTotalTimeOff = Module.cwrap('ascii_get_benchmark_total_time_simd_off', 'number', []);
+        const getBenchMinTimeOff = Module.cwrap('ascii_get_benchmark_min_time_simd_off', 'number', []);
+        const getBenchMaxTimeOff = Module.cwrap('ascii_get_benchmark_max_time_simd_off', 'number', []);
+        const getBenchAvgTimeOff = Module.cwrap('ascii_get_benchmark_avg_time_simd_off', 'number', []);
+        
+        // 1초 윈도우 FPS 조회 함수들
+        const getCurrentFpsOn = Module.cwrap('ascii_get_current_fps_simd_on', 'number', []);
+        const getCurrentFpsOff = Module.cwrap('ascii_get_current_fps_simd_off', 'number', []);
 
-                    const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d', { alpha: false });  // 알파 채널 비활성화로 성능 향상
+        if (!getBufferPtr || !getBufferSize) { console.error("Failed to wrap WASM buffer functions."); return; }
 
-                    const ASCII_WIDTH = 240;
-                    const ASCII_HEIGHT = 80;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
 
-                    // wrapper 영역 크기 가져오기
-                    const screenWrapper = document.querySelector('.screen-wrapper');
-                    const wrapperRect = screenWrapper.getBoundingClientRect();
-                    
-                    // wrapper 전체를 캔버스로 채움 (비율 무시 - 게임 화면 짤림 방지)
-                    const canvasWidth = wrapperRect.width;
-                    const canvasHeight = wrapperRect.height;
-                    
-                    // devicePixelRatio 고려 (레티나 디스플레이 지원)
-                    const dpr = window.devicePixelRatio || 1;
-                    const TARGET_CANVAS_WIDTH = Math.round(canvasWidth * dpr);
-                    const TARGET_CANVAS_HEIGHT = Math.round(canvasHeight * dpr);
+        // 폰트/간격 계산에 쓰는 상태
+        const screenWrapper = document.querySelector('.screen-wrapper');
+        let DPR, CW, CH, lineHeight, fontSize, xAdvance, yAdvance, FONT_FAMILY;
 
-                    const charWidth = TARGET_CANVAS_WIDTH / ASCII_WIDTH;
-                    const charHeight = TARGET_CANVAS_HEIGHT / ASCII_HEIGHT;
+        // 폰트/캔버스 크기/advance 재계산
+        function recalc() {
+          const rect = screenWrapper.getBoundingClientRect();
+          DPR = window.devicePixelRatio || 1;
+          CW = Math.round(rect.width  * DPR);
+          CH = Math.round(rect.height * DPR);
+          canvas.width = CW;
+          canvas.height = CH;
 
-                    const FONT_SIZE = Math.round(charHeight); 
-                    const FONT = `${FONT_SIZE}px "Courier New", monospace`;
-                    
-                    ctx.font = FONT; 
+          // 폰트 설정
+          FONT_FAMILY = `"VT323", "Courier New", monospace`;
+          ctx.textBaseline = 'top';
+          ctx.textAlign = 'left';
 
-                    // 내부 해상도 설정 (DPR 반영)
-                    canvas.width = TARGET_CANVAS_WIDTH;
-                    canvas.height = TARGET_CANVAS_HEIGHT;
+          // 목표 셀 크기
+          const targetCellW = Math.floor(CW / ASCII_WIDTH);
+          lineHeight = Math.floor(CH / ASCII_HEIGHT); // 세로 기준
+          fontSize = lineHeight;
+          ctx.font = `${fontSize}px ${FONT_FAMILY}`;
 
-                    console.log(`Canvas initialized: ${canvas.width}x${canvas.height} (Wrapper: ${Math.round(canvasWidth)}x${Math.round(canvasHeight)}, DPR: ${dpr})`);
-                    console.log(`Character cell size: ${charWidth.toFixed(1)}x${charHeight.toFixed(1)}`);
-                
-                function getMemoryBuffer() {
-                    if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) {
-                        return HEAPU8.buffer;
-                    } else if (Module.HEAPU8 && Module.HEAPU8.buffer) {
-                        return Module.HEAPU8.buffer;
-                    } else if (Module.HEAP8 && Module.HEAP8.buffer) {
-                        return Module.HEAP8.buffer;
-                    } else if (Module.wasmMemory && Module.wasmMemory.buffer) {
-                        return Module.wasmMemory.buffer;
-                    }
-                    return null;
-                }
+          // 실제 글자 폭 측정
+          const measureAdvance = (px) => {
+            ctx.font = `${px}px ${FONT_FAMILY}`;
+            return ctx.measureText('M').width;
+          };
+          let adv = measureAdvance(fontSize);
 
-                const testBuffer = getMemoryBuffer();
-                if (!testBuffer) {
-                    console.error("Cannot access WASM memory buffer.");
-                    return;
-                }
-                console.log("Memory buffer access confirmed");
+          // 폭이 셀보다 크면 폰트 크기 줄이기
+          if (adv > targetCellW) {
+            const scale = targetCellW / adv;
+            fontSize = Math.max(8, Math.floor(fontSize * scale));
+            adv = measureAdvance(fontSize);
+          }
 
-                let frameCount = 0;
-                let lastLogTime = Date.now();
+          // 최종 확정
+          ctx.font = `${fontSize}px ${FONT_FAMILY}`;
+          xAdvance = Math.ceil(adv);    // 가독성 위해 올림
+          yAdvance = lineHeight;
+        }
 
-                    function renderFrame() {
-                        try {
-                            const bufferPtr = getBufferPtr();
-                            const bufferSize = getBufferSize();
+        // 최초 계산 + 리사이즈 대응
+        recalc();
+        window.addEventListener('resize', () => { recalc(); });
 
-                        if (!bufferPtr || !bufferSize) {
-                            if (frameCount % 60 === 0) {
-                                console.log("Waiting for buffer...", { bufferPtr, bufferSize });
-                            }
-                            return;
-                        }
+        function getMemoryBuffer() {
+          if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) return HEAPU8.buffer;
+          if (Module.HEAPU8 && Module.HEAPU8.buffer) return Module.HEAPU8.buffer;
+          if (Module.HEAP8 && Module.HEAP8.buffer) return Module.HEAP8.buffer;
+          if (Module.wasmMemory && Module.wasmMemory.buffer) return Module.wasmMemory.buffer;
+          return null;
+        }
 
-                        const heapBuffer = getMemoryBuffer();
-                        if (!heapBuffer) {
-                            console.error("Cannot access memory buffer");
-                            return;
-                        }
+        if (!getMemoryBuffer()) { console.error("Cannot access WASM memory buffer."); return; }
 
-                        const buffer = new Uint8Array(heapBuffer, bufferPtr, bufferSize);
-                        
-                        // 디버그 로깅 (2초마다)
-                        if (frameCount === 0 || Date.now() - lastLogTime > 2000) {
-                            console.log("Buffer size:", bufferSize, "Expected:", ASCII_WIDTH * ASCII_HEIGHT * 4);
-                            lastLogTime = Date.now();
-                        }
-                        
-                        // 배경 클리어
-                        ctx.fillStyle = '#000';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.font = FONT;
+        // 벤치마크 모드 상태
+        let benchmarkMode = false;
+        let benchmarkFrameCounter = 0;
+        // 각 모드별로 충분한 샘플 수집 (50200회 권장, 하지만 프레임 기반이므로 적절한 간격으로 전환)
+        // 0.15ms 기준으로 약 6666 FPS 가능, 실제로는 더 낮으므로 각 모드당 충분한 프레임 수집
+        const BENCHMARK_SWITCH_INTERVAL = 300; // 각 모드당 300프레임 측정 (워밍업 3프레임 제외하면 297프레임)
 
-                        const expectedSize = ASCII_WIDTH * ASCII_HEIGHT * 4;
-                        if (buffer.length < expectedSize) {
-                            if (frameCount % 60 === 0) {
-                                console.warn(`Buffer size mismatch: got ${buffer.length}, expected ${expectedSize}`);
-                            }
-                            return;
-                        }
+        // 벤치마크 UI 요소
+        const benchmarkPanel = document.getElementById('benchmark-panel');
+        const benchmarkToggle = document.getElementById('benchmark-toggle');
+        const currentModeEl = document.getElementById('benchmark-current-mode');
 
-                        // 최적화된 렌더링 루프
-                        let i = 0;
-                        const totalCells = ASCII_WIDTH * ASCII_HEIGHT;
-                        
-                        for (let y = 0; y < ASCII_HEIGHT; y++) {
-                            const yPos = y * charHeight + charHeight;
-                            
-                            for (let x = 0; x < ASCII_WIDTH; x++) {
-                                const charCode = buffer[i];
-                                const r = buffer[i + 1];
-                                const g = buffer[i + 2];
-                                const b = buffer[i + 3];
-                                i += 4;
+        // 벤치마크 통계 업데이트 함수
+        function updateBenchmarkStats() {
+          if (!benchmarkMode) return;
 
-                                // 비어있지 않은 셀만 렌더링 (조건 체크 1회로 통합)
-                                if (charCode > 32 || r > 10 || g > 10 || b > 10) {
-                                    ctx.fillStyle = `rgb(${r},${g},${b})`;
-                                    ctx.fillText(String.fromCharCode(charCode), x * charWidth, yPos);
-                                }
-                            }
-                        }
-                        
-                        frameCount++;
-                        
-                        // 첫 프레임 로깅
-                        if (frameCount === 1) {
-                            console.log("First frame rendered successfully");
-                        }
-                        } catch (e) {
-                            console.error("Error during canvas rendering:", e);
-                            clearInterval(renderInterval);
-                        }
-                    }
+          // SIMD ON 통계
+          const statsOn = {
+            minTime: getBenchMinTimeOn(),
+            maxTime: getBenchMaxTimeOn(),
+            avgTime: getBenchAvgTimeOn(),
+            currentFps: getCurrentFpsOn()
+          };
 
-                    const renderInterval = setInterval(renderFrame, 16); 
-                    
-                    callMain(commonArgs);
+          // SIMD OFF 통계
+          const statsOff = {
+            minTime: getBenchMinTimeOff(),
+            maxTime: getBenchMaxTimeOff(),
+            avgTime: getBenchAvgTimeOff(),
+            currentFps: getCurrentFpsOff()
+          };
+
+          // UI 업데이트 - SIMD ON
+          const minTimeOn = statsOn.minTime < 1e8 ? statsOn.minTime : 0.0;
+          const maxTimeOn = statsOn.maxTime;
+          const avgTimeOn = statsOn.avgTime;
+          
+          document.getElementById('bench-simd-on-fps-current').textContent = statsOn.currentFps.toFixed(2);
+          document.getElementById('bench-simd-on-latency-avg').textContent = avgTimeOn.toFixed(2) + ' ms';
+          document.getElementById('bench-simd-on-latency-min').textContent = minTimeOn.toFixed(2) + ' ms';
+          document.getElementById('bench-simd-on-latency-max').textContent = maxTimeOn.toFixed(2) + ' ms';
+
+          // UI 업데이트 - SIMD OFF
+          const minTimeOff = statsOff.minTime < 1e8 ? statsOff.minTime : 0.0;
+          const maxTimeOff = statsOff.maxTime;
+          const avgTimeOff = statsOff.avgTime;
+          
+          document.getElementById('bench-simd-off-fps-current').textContent = statsOff.currentFps.toFixed(2);
+          document.getElementById('bench-simd-off-latency-avg').textContent = avgTimeOff.toFixed(2) + ' ms';
+          document.getElementById('bench-simd-off-latency-min').textContent = minTimeOff.toFixed(2) + ' ms';
+          document.getElementById('bench-simd-off-latency-max').textContent = maxTimeOff.toFixed(2) + ' ms';
+        }
+
+        // 벤치마크 토글
+        benchmarkToggle.addEventListener('click', () => {
+          benchmarkMode = !benchmarkMode;
+          setBenchmarkMode(benchmarkMode ? 1 : 0);
+          
+          if (benchmarkMode) {
+            resetBenchmarkStats();
+            benchmarkPanel.classList.add('active');
+            benchmarkToggle.textContent = 'BENCHMARK: ON';
+            benchmarkToggle.style.color = '#0f0';
+            benchmarkToggle.style.borderColor = '#0f0';
+            benchmarkFrameCounter = 0;
+            // 초기 SIMD 상태 설정
+            setSimd(1);
+          } else {
+            benchmarkPanel.classList.remove('active');
+            benchmarkToggle.textContent = 'BENCHMARK: OFF';
+            benchmarkToggle.style.color = '#ff3333';
+            benchmarkToggle.style.borderColor = '#ff3333';
+          }
+        });
+
+        // SIMD 토글 (벤치마크 모드가 아닐 때만 수동 제어)
+        const simdToggle = document.getElementById('simd-toggle');
+        if (simdSupported() === 1) {
+          simdToggle.addEventListener('click', () => {
+            if (benchmarkMode) return; // 벤치마크 모드에서는 수동 제어 불가
+            const current = getSimd();
+            setSimd(current ? 0 : 1);
+            const newState = getSimd();
+            simdToggle.textContent = `SIMD: ${newState ? 'ON' : 'OFF'}`;
+            simdToggle.style.color = newState ? '#0f0' : '#f00';
+            simdToggle.style.borderColor = newState ? '#0f0' : '#f00';
+          });
+        } else {
+          simdToggle.textContent = 'SIMD: N/A';
+          simdToggle.style.color = '#666';
+          simdToggle.disabled = true;
+        }
+
+        // 렌더 루프
+        function renderFrame() {
+          // 벤치마크 모드일 때 SIMD ON/OFF 전환
+          if (benchmarkMode) {
+            benchmarkFrameCounter++;
+            if (benchmarkFrameCounter >= BENCHMARK_SWITCH_INTERVAL) {
+              benchmarkFrameCounter = 0;
+              const current = getSimd();
+              setSimd(current ? 0 : 1);
+              const newState = getSimd();
+              currentModeEl.textContent = `Testing: SIMD ${newState ? 'ON' : 'OFF'}`;
+              currentModeEl.style.color = newState ? '#0f0' : '#ff3333';
             }
+            // 벤치마크 모드에서는 canvas 그리기 스킵
+            updateBenchmarkStats();
+          } else {
+            // 일반 모드: canvas 그리기
+            try {
+              const ptr = getBufferPtr();
+              const size = getBufferSize();
+              if (!ptr || !size) return;
 
-            window.onerror = function (event) {
-                console.error("Unhandled error:", event);
-            };
-        </script>
-        <script async type="text/javascript" src="chocolate-doom.js"></script>
-    </body>
+              const heap = getMemoryBuffer();
+              const buffer = new Uint8Array(heap, ptr, size);
+
+              // 예상 크기 확인 (1cell=4바이트: char + r + g + b)
+              const expected = ASCII_WIDTH * ASCII_HEIGHT * 4;
+              if (buffer.length < expected) {
+                return;
+              }
+
+              // 배경 클리어
+              ctx.fillStyle = '#000';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              // 텍스트 그리기
+              let i = 0;
+              for (let y = 0; y < ASCII_HEIGHT; y++) {
+                const yPos = y * yAdvance; // 'top' 기준
+                for (let x = 0; x < ASCII_WIDTH; x++) {
+                  const charCode = buffer[i];
+                  const r = buffer[i + 1];
+                  const g = buffer[i + 2];
+                  const b = buffer[i + 3];
+                  i += 4;
+
+                  // 비어있는 셀은 스킵
+                  if (charCode > 32 || r > 10 || g > 10 || b > 10) {
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillText(String.fromCharCode(charCode), x * xAdvance, yPos);
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("Error during canvas rendering:", e);
+            }
+          }
+        }
+
+        function loop() {
+          renderFrame();
+          requestAnimationFrame(loop);
+        }
+
+        // 시작
+        callMain(commonArgs);
+        requestAnimationFrame(loop);
+      }
+
+      window.onerror = function (event) { console.error("Unhandled error:", event); };
+    </script>
+  </body>
 </html>

@@ -2,8 +2,6 @@
 
 include ../config.make
 
-DOC_FILES += README.Strife.md NOT-BUGS.md
-
 export MACOSX_DEPLOYMENT_TARGET=10.7
 
 ifeq ($(TARGET_OS),arm)

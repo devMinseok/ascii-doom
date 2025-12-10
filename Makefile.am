@@ -14,27 +14,18 @@ CMAKE_FILES=                                   \
 
 DOC_FILES=                              \
         COPYING.md                      \
-        README.md                       \
-        README.Music.md                 \
-        NEWS.md                         \
-        PHILOSOPHY.md                   \
-        ChangeLog
+        README.md
 
 EXTRA_DIST=                             \
         $(AUX_DIST_GEN)                 \
         $(CMAKE_FILES)                  \
         $(DOC_FILES)                    \
-        NOT-BUGS.md                     \
-        README.Strife.md                \
-        .lvimrc                         \
-        HACKING.md                      \
-        TODO.md                         \
         rpm.spec                        \
         win32/win_opendir.c             \
         win32/win_opendir.h
 
 doomdocsdir = ${docdir}/../${PROGRAM_PREFIX}doom
-doomdocs_DATA = $(DOC_FILES) NOT-BUGS.md
+doomdocs_DATA = $(DOC_FILES)
 
 hereticdocsdir = ${docdir}/../${PROGRAM_PREFIX}heretic
 hereticdocs_DATA = $(DOC_FILES)
@@ -43,7 +34,7 @@ hexendocsdir = ${docdir}/../${PROGRAM_PREFIX}hexen
 hexendocs_DATA = $(DOC_FILES)
 
 strifedocsdir = ${docdir}/../${PROGRAM_PREFIX}strife
-strifedocs_DATA = $(DOC_FILES) README.Strife.md
+strifedocs_DATA = $(DOC_FILES)
 
 MAINTAINERCLEANFILES =  $(AUX_DIST_GEN)
 

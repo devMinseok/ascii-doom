@@ -30,7 +30,7 @@ AS_IF([test "x$enable_emscripten" = "xyes"],
   SDLMIXER_LIBS="-s USE_SDL=2 -s USE_SDL_MIXER=2"
   SDLNET_CFLAGS="-s USE_SDL=2 -s USE_SDL_NET=2"
   SDLNET_LIBS="-s USE_SDL=2 -s USE_SDL_NET=2"
-  EM_LDFLAGS="-s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY=1 -s EXPORTED_RUNTIME_METHODS=[ccall,cwrap,FS,ENV,PATH,ERRNO_CODES] -s FORCE_FILESYSTEM -msimd128"
+  EM_LDFLAGS="-s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY=1 -s ASSERTIONS=0 -s EXPORTED_RUNTIME_METHODS=[ccall,cwrap,FS,ENV,PATH,ERRNO_CODES] -s EXPORTED_FUNCTIONS=[_main,_ascii_get_buffer,_ascii_get_buffer_size,_ascii_set_simd,_ascii_get_simd,_ascii_simd_supported,_ascii_set_benchmark_mode,_ascii_get_benchmark_mode,_ascii_reset_benchmark_stats,_ascii_get_benchmark_frame_count_simd_on,_ascii_get_benchmark_total_time_simd_on,_ascii_get_benchmark_min_time_simd_on,_ascii_get_benchmark_max_time_simd_on,_ascii_get_benchmark_avg_time_simd_on,_ascii_get_benchmark_frame_count_simd_off,_ascii_get_benchmark_total_time_simd_off,_ascii_get_benchmark_min_time_simd_off,_ascii_get_benchmark_max_time_simd_off,_ascii_get_benchmark_avg_time_simd_off] -s FORCE_FILESYSTEM -msimd128"
 )
 
 AC_CONFIG_AUX_DIR(autotools)
@@ -44,7 +44,7 @@ AC_PROG_CXX
 AC_PROG_RANLIB
 AC_CHECK_PROG(HAVE_PYTHON, python3, true, false)
 
-OPT_LEVEL=2
+OPT_LEVEL=3
 
 # If this is gcc, we have some options we'd like to turn on.  Turn on 
 # optimisation and debugging symbols.
@@ -52,7 +52,13 @@ OPT_LEVEL=2
 if test "$GCC" = "yes"
 then
         WARNINGS="-Wall -Wdeclaration-after-statement -Wredundant-decls"
-        CFLAGS="-O$OPT_LEVEL -g $WARNINGS $orig_CFLAGS"
+        CFLAGS="-O$OPT_LEVEL $WARNINGS $orig_CFLAGS"
+        # C++ 파일에 대한 추가 최적화 플래그 (벤치마크 성능 향상)
+        # Emscripten 환경에서만 예외/RTTI 비활성화
+        AS_IF([test "x$enable_emscripten" = "xyes"],
+          [CXXFLAGS="-O$OPT_LEVEL -fno-exceptions -fno-rtti $WARNINGS $orig_CFLAGS"],
+          [CXXFLAGS="-O$OPT_LEVEL $WARNINGS $orig_CFLAGS"]
+        )
 fi
 
 AC_CANONICAL_TARGET

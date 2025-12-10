@@ -34,12 +34,8 @@ $(STRIFE_ZIP): staging-strife hook-strife
 # Special hooks to custom modify files for particular games.
 
 hook-doom: staging-doom
-	-pandoc $(PANDOC_FLAGS) -o $</NOT-BUGS.html $(TOPLEVEL)/NOT-BUGS.md
-
-# Chocolate Strife has its own custom README file:
 
 hook-strife: staging-strife
-	-pandoc $(PANDOC_FLAGS) -o $</README.html $(TOPLEVEL)/README.Strife.md
 
 # Build up a staging dir for a particular game.
 

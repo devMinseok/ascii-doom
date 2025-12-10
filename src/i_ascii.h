@@ -1,66 +1,45 @@
-//
-// Copyright(C) 1993-1996 Id Software, Inc.
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//	ASCII art rendering for Emscripten web port.
-//
-
-#ifndef I_ASCII_H
-#define I_ASCII_H
-
-#include "doomtype.h"
-
-#ifdef __EMSCRIPTEN__
+#pragma once
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// ASCII output dimensions (optimized for performance)
-// 240x80 = 19,200 cells (vs 480x160 = 76,800 cells = 4x faster)
+// 문자 그리드 해상도 (웹/JS와 반드시 일치)
+#ifndef ASCII_WIDTH
 #define ASCII_WIDTH  240
+#endif
+#ifndef ASCII_HEIGHT
 #define ASCII_HEIGHT 80
+#endif
 
-// Struct to hold data for one character cell
 typedef struct {
-    char character;
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
+    char    character;
+    uint8_t r, g, b;
 } AsciiCell;
 
+// 초기화/종료
+void I_InitASCII(void);
+void I_ShutdownASCII(void);
 
-// Convert RGBA buffer to an array of AsciiCell data
-void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer, 
+// RGBA32(0xAARRGGBB) → ASCII 셀 버퍼 변환
+void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
                           int src_width, int src_height,
-                          void *cell_buffer,
+                          void *output_buffer,
                           int ascii_width, int ascii_height);
 
-// Get pointer to the current AsciiCell buffer (for Emscripten export)
+// 버퍼 포인터/크기
 const void* I_GetASCIIBuffer(void);
 
-// Initialize ASCII rendering
-void I_InitASCII(void);
+// 런타임 토글/상태
+void ascii_set_simd(int enabled);
+int  ascii_get_simd(void);
+int  ascii_simd_supported(void);
 
-// Cleanup ASCII rendering
-void I_ShutdownASCII(void);
+// (선택) 엔진 FPS/지연 측정용 카운터 getter
+uint32_t ascii_get_frame_id(void);
+double   ascii_get_last_ms(void);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif // __EMSCRIPTEN__
-
-#endif // I_ASCII_H
-
