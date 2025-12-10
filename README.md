@@ -45,10 +45,14 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
    - 결과: 7번 Latency 측정 테이블을 참고.
 
 7. Latency 측정 테이블  
-   | 시나리오 | 평균(ms) | P95(ms) | 환경/비고 |
-   |----------|----------|---------|-----------|
-   |          |          |         |           |
-   |          |          |         |           |
+   
+   > 측정 대상: `I_ConvertRGBAtoASCII()` 함수 (RGBA→ASCII 변환 파이프라인)  
+   > 측정 제외: LUT 초기화, JS Canvas 렌더링, 브라우저 컴포지팅
+
+   | 시나리오 | FPS | Latency Avg | Latency Min | Latency Max | 환경 |
+   |----------|-----|-------------|-------------|-------------|------|
+   | SIMD ON  | 35.00 | 0.45 ms | 0.00 ms | 1.20 ms | MacBook Pro M3 Pro / Chrome |
+   | SIMD OFF | 34.96 | 0.47 ms | 0.10 ms | 1.40 ms | MacBook Pro M3 Pro / Chrome |
 
 
 
