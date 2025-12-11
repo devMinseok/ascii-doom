@@ -24,6 +24,7 @@
 
       <div class="monitor-footer">
         SYSTEM: ONLINE | RENDERER: ASCII_WASM |
+        <button id="engine-toggle" class="control-button control-button--engine">ENGINE: C++</button>
         <button id="simd-toggle" class="control-button control-button--simd">SIMD: ON</button>
         <button id="benchmark-toggle" class="control-button control-button--benchmark">BENCHMARK: OFF</button>
       </div>
@@ -31,34 +32,40 @@
       <div id="benchmark-panel">
         <h3>BENCHMARK MODE</h3>
         <div id="benchmark-current-mode">Testing: SIMD ON</div>
-        <div class="benchmark-stats">
-          <h4>SIMD ON</h4>
-          <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-on-fps-current">0.00</span></div>
-          <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-on-latency-avg">0.00 ms</span></div>
-          <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-on-latency-min">0.00 ms</span></div>
-          <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-on-latency-max">0.00 ms</span></div>
+        <div id="benchmark-cpp-stats">
+          <div class="benchmark-stats">
+            <h4>SIMD ON</h4>
+            <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-on-fps-current">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-on-latency-avg">0.00 ms</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-on-latency-min">0.00 ms</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-on-latency-max">0.00 ms</span></div>
+          </div>
+          <div class="benchmark-stats">
+            <h4>SIMD OFF</h4>
+            <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-off-fps-current">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-off-latency-avg">0.00 ms</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-off-latency-min">0.00 ms</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-off-latency-max">0.00 ms</span></div>
+          </div>
         </div>
-        <div class="benchmark-stats">
-          <h4>SIMD OFF</h4>
-          <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-simd-off-fps-current">0.00</span></div>
-          <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-simd-off-latency-avg">0.00 ms</span></div>
-          <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-simd-off-latency-min">0.00 ms</span></div>
-          <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-simd-off-latency-max">0.00 ms</span></div>
+        <div id="benchmark-js-stats" style="display:none;">
+          <div class="benchmark-stats">
+            <h4>JavaScript</h4>
+            <div class="stat-row"><span class="stat-label">Current FPS:</span><span class="stat-value" id="bench-js-fps-current">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Avg):</span><span class="stat-value" id="bench-js-latency-avg">0.00 ms</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Min):</span><span class="stat-value" id="bench-js-latency-min">0.00 ms</span></div>
+            <div class="stat-row"><span class="stat-label">Latency (Max):</span><span class="stat-value" id="bench-js-latency-max">0.00 ms</span></div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- chocolate-doom.js (emscripten output) -->
     <script async type="text/javascript" src="chocolate-doom.js"></script>
+    <!-- renderer.js (ASCII rendering logic) -->
+    <script type="text/javascript" src="renderer.js"></script>
 
     <script>
-      // Doom args
-      const commonArgs = ["-iwad","doom1.wad","-window","-nogui","-nomusic","-config","default.cfg","-servername","doomflare","-force_software_renderer","1"];
-
-      // JS/WASM 해상도 (i_ascii.h의 ASCII_WIDTH/HEIGHT와 반드시 동일)
-      const ASCII_WIDTH  = 240;
-      const ASCII_HEIGHT = 80;
-
       // Emscripten module
       var Module = {
         onRuntimeInitialized: () => {
@@ -78,260 +85,6 @@
         setStatus:function (text) { },
         canvas: document.getElementById("sdl-canvas"),
       };
-
-      function setupRenderer() {
-        // WASM exports
-        const getBufferPtr  = Module.cwrap('ascii_get_buffer', 'number', []);
-        const getBufferSize = Module.cwrap('ascii_get_buffer_size', 'number', []);
-        const setSimd       = Module.cwrap('ascii_set_simd', null, ['number']);
-        const getSimd       = Module.cwrap('ascii_get_simd', 'number', []);
-        const simdSupported = Module.cwrap('ascii_simd_supported', 'number', []);
-        const setBenchmarkMode = Module.cwrap('ascii_set_benchmark_mode', null, ['number']);
-        const getBenchmarkMode = Module.cwrap('ascii_get_benchmark_mode', 'number', []);
-        const resetBenchmarkStats = Module.cwrap('ascii_reset_benchmark_stats', null, []);
-        
-        // 벤치마크 통계 조회 함수들 (SIMD ON)
-        const getBenchFrameCountOn = Module.cwrap('ascii_get_benchmark_frame_count_simd_on', 'number', []);
-        const getBenchTotalTimeOn = Module.cwrap('ascii_get_benchmark_total_time_simd_on', 'number', []);
-        const getBenchMinTimeOn = Module.cwrap('ascii_get_benchmark_min_time_simd_on', 'number', []);
-        const getBenchMaxTimeOn = Module.cwrap('ascii_get_benchmark_max_time_simd_on', 'number', []);
-        const getBenchAvgTimeOn = Module.cwrap('ascii_get_benchmark_avg_time_simd_on', 'number', []);
-        
-        // 벤치마크 통계 조회 함수들 (SIMD OFF)
-        const getBenchFrameCountOff = Module.cwrap('ascii_get_benchmark_frame_count_simd_off', 'number', []);
-        const getBenchTotalTimeOff = Module.cwrap('ascii_get_benchmark_total_time_simd_off', 'number', []);
-        const getBenchMinTimeOff = Module.cwrap('ascii_get_benchmark_min_time_simd_off', 'number', []);
-        const getBenchMaxTimeOff = Module.cwrap('ascii_get_benchmark_max_time_simd_off', 'number', []);
-        const getBenchAvgTimeOff = Module.cwrap('ascii_get_benchmark_avg_time_simd_off', 'number', []);
-        
-        // 1초 윈도우 FPS 조회 함수들
-        const getCurrentFpsOn = Module.cwrap('ascii_get_current_fps_simd_on', 'number', []);
-        const getCurrentFpsOff = Module.cwrap('ascii_get_current_fps_simd_off', 'number', []);
-
-        if (!getBufferPtr || !getBufferSize) { console.error("Failed to wrap WASM buffer functions."); return; }
-
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
-
-        // 폰트/간격 계산에 쓰는 상태
-        const screenWrapper = document.querySelector('.screen-wrapper');
-        let DPR, CW, CH, lineHeight, fontSize, xAdvance, yAdvance, FONT_FAMILY;
-
-        // 폰트/캔버스 크기/advance 재계산
-        function recalc() {
-          const rect = screenWrapper.getBoundingClientRect();
-          DPR = window.devicePixelRatio || 1;
-          CW = Math.round(rect.width  * DPR);
-          CH = Math.round(rect.height * DPR);
-          canvas.width = CW;
-          canvas.height = CH;
-
-          // 폰트 설정
-          FONT_FAMILY = `"VT323", "Courier New", monospace`;
-          ctx.textBaseline = 'top';
-          ctx.textAlign = 'left';
-
-          // 목표 셀 크기
-          const targetCellW = Math.floor(CW / ASCII_WIDTH);
-          lineHeight = Math.floor(CH / ASCII_HEIGHT); // 세로 기준
-          fontSize = lineHeight;
-          ctx.font = `${fontSize}px ${FONT_FAMILY}`;
-
-          // 실제 글자 폭 측정
-          const measureAdvance = (px) => {
-            ctx.font = `${px}px ${FONT_FAMILY}`;
-            return ctx.measureText('M').width;
-          };
-          let adv = measureAdvance(fontSize);
-
-          // 폭이 셀보다 크면 폰트 크기 줄이기
-          if (adv > targetCellW) {
-            const scale = targetCellW / adv;
-            fontSize = Math.max(8, Math.floor(fontSize * scale));
-            adv = measureAdvance(fontSize);
-          }
-
-          // 최종 확정
-          ctx.font = `${fontSize}px ${FONT_FAMILY}`;
-          xAdvance = Math.ceil(adv);    // 가독성 위해 올림
-          yAdvance = lineHeight;
-        }
-
-        // 최초 계산 + 리사이즈 대응
-        recalc();
-        window.addEventListener('resize', () => { recalc(); });
-
-        function getMemoryBuffer() {
-          if (typeof HEAPU8 !== 'undefined' && HEAPU8 && HEAPU8.buffer) return HEAPU8.buffer;
-          if (Module.HEAPU8 && Module.HEAPU8.buffer) return Module.HEAPU8.buffer;
-          if (Module.HEAP8 && Module.HEAP8.buffer) return Module.HEAP8.buffer;
-          if (Module.wasmMemory && Module.wasmMemory.buffer) return Module.wasmMemory.buffer;
-          return null;
-        }
-
-        if (!getMemoryBuffer()) { console.error("Cannot access WASM memory buffer."); return; }
-
-        // 벤치마크 모드 상태
-        let benchmarkMode = false;
-        let benchmarkFrameCounter = 0;
-        // 각 모드별로 충분한 샘플 수집 (50200회 권장, 하지만 프레임 기반이므로 적절한 간격으로 전환)
-        // 0.15ms 기준으로 약 6666 FPS 가능, 실제로는 더 낮으므로 각 모드당 충분한 프레임 수집
-        const BENCHMARK_SWITCH_INTERVAL = 300; // 각 모드당 300프레임 측정 (워밍업 3프레임 제외하면 297프레임)
-
-        // 벤치마크 UI 요소
-        const benchmarkPanel = document.getElementById('benchmark-panel');
-        const benchmarkToggle = document.getElementById('benchmark-toggle');
-        const currentModeEl = document.getElementById('benchmark-current-mode');
-
-        // 벤치마크 통계 업데이트 함수
-        function updateBenchmarkStats() {
-          if (!benchmarkMode) return;
-
-          // SIMD ON 통계
-          const statsOn = {
-            minTime: getBenchMinTimeOn(),
-            maxTime: getBenchMaxTimeOn(),
-            avgTime: getBenchAvgTimeOn(),
-            currentFps: getCurrentFpsOn()
-          };
-
-          // SIMD OFF 통계
-          const statsOff = {
-            minTime: getBenchMinTimeOff(),
-            maxTime: getBenchMaxTimeOff(),
-            avgTime: getBenchAvgTimeOff(),
-            currentFps: getCurrentFpsOff()
-          };
-
-          // UI 업데이트 - SIMD ON
-          const minTimeOn = statsOn.minTime < 1e8 ? statsOn.minTime : 0.0;
-          const maxTimeOn = statsOn.maxTime;
-          const avgTimeOn = statsOn.avgTime;
-          
-          document.getElementById('bench-simd-on-fps-current').textContent = statsOn.currentFps.toFixed(2);
-          document.getElementById('bench-simd-on-latency-avg').textContent = avgTimeOn.toFixed(2) + ' ms';
-          document.getElementById('bench-simd-on-latency-min').textContent = minTimeOn.toFixed(2) + ' ms';
-          document.getElementById('bench-simd-on-latency-max').textContent = maxTimeOn.toFixed(2) + ' ms';
-
-          // UI 업데이트 - SIMD OFF
-          const minTimeOff = statsOff.minTime < 1e8 ? statsOff.minTime : 0.0;
-          const maxTimeOff = statsOff.maxTime;
-          const avgTimeOff = statsOff.avgTime;
-          
-          document.getElementById('bench-simd-off-fps-current').textContent = statsOff.currentFps.toFixed(2);
-          document.getElementById('bench-simd-off-latency-avg').textContent = avgTimeOff.toFixed(2) + ' ms';
-          document.getElementById('bench-simd-off-latency-min').textContent = minTimeOff.toFixed(2) + ' ms';
-          document.getElementById('bench-simd-off-latency-max').textContent = maxTimeOff.toFixed(2) + ' ms';
-        }
-
-        // 벤치마크 토글
-        benchmarkToggle.addEventListener('click', () => {
-          benchmarkMode = !benchmarkMode;
-          setBenchmarkMode(benchmarkMode ? 1 : 0);
-          
-          if (benchmarkMode) {
-            resetBenchmarkStats();
-            benchmarkPanel.classList.add('active');
-            benchmarkToggle.textContent = 'BENCHMARK: ON';
-            benchmarkToggle.style.color = '#0f0';
-            benchmarkToggle.style.borderColor = '#0f0';
-            benchmarkFrameCounter = 0;
-            // 초기 SIMD 상태 설정
-            setSimd(1);
-          } else {
-            benchmarkPanel.classList.remove('active');
-            benchmarkToggle.textContent = 'BENCHMARK: OFF';
-            benchmarkToggle.style.color = '#ff3333';
-            benchmarkToggle.style.borderColor = '#ff3333';
-          }
-        });
-
-        // SIMD 토글 (벤치마크 모드가 아닐 때만 수동 제어)
-        const simdToggle = document.getElementById('simd-toggle');
-        if (simdSupported() === 1) {
-          simdToggle.addEventListener('click', () => {
-            if (benchmarkMode) return; // 벤치마크 모드에서는 수동 제어 불가
-            const current = getSimd();
-            setSimd(current ? 0 : 1);
-            const newState = getSimd();
-            simdToggle.textContent = `SIMD: ${newState ? 'ON' : 'OFF'}`;
-            simdToggle.style.color = newState ? '#0f0' : '#f00';
-            simdToggle.style.borderColor = newState ? '#0f0' : '#f00';
-          });
-        } else {
-          simdToggle.textContent = 'SIMD: N/A';
-          simdToggle.style.color = '#666';
-          simdToggle.disabled = true;
-        }
-
-        // 렌더 루프
-        function renderFrame() {
-          // 벤치마크 모드일 때 SIMD ON/OFF 전환
-          if (benchmarkMode) {
-            benchmarkFrameCounter++;
-            if (benchmarkFrameCounter >= BENCHMARK_SWITCH_INTERVAL) {
-              benchmarkFrameCounter = 0;
-              const current = getSimd();
-              setSimd(current ? 0 : 1);
-              const newState = getSimd();
-              currentModeEl.textContent = `Testing: SIMD ${newState ? 'ON' : 'OFF'}`;
-              currentModeEl.style.color = newState ? '#0f0' : '#ff3333';
-            }
-            // 벤치마크 모드에서는 canvas 그리기 스킵
-            updateBenchmarkStats();
-          } else {
-            // 일반 모드: canvas 그리기
-            try {
-              const ptr = getBufferPtr();
-              const size = getBufferSize();
-              if (!ptr || !size) return;
-
-              const heap = getMemoryBuffer();
-              const buffer = new Uint8Array(heap, ptr, size);
-
-              // 예상 크기 확인 (1cell=4바이트: char + r + g + b)
-              const expected = ASCII_WIDTH * ASCII_HEIGHT * 4;
-              if (buffer.length < expected) {
-                return;
-              }
-
-              // 배경 클리어
-              ctx.fillStyle = '#000';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-              // 텍스트 그리기
-              let i = 0;
-              for (let y = 0; y < ASCII_HEIGHT; y++) {
-                const yPos = y * yAdvance; // 'top' 기준
-                for (let x = 0; x < ASCII_WIDTH; x++) {
-                  const charCode = buffer[i];
-                  const r = buffer[i + 1];
-                  const g = buffer[i + 2];
-                  const b = buffer[i + 3];
-                  i += 4;
-
-                  // 비어있는 셀은 스킵
-                  if (charCode > 32 || r > 10 || g > 10 || b > 10) {
-                    ctx.fillStyle = `rgb(${r},${g},${b})`;
-                    ctx.fillText(String.fromCharCode(charCode), x * xAdvance, yPos);
-                  }
-                }
-              }
-            } catch (e) {
-              console.error("Error during canvas rendering:", e);
-            }
-          }
-        }
-
-        function loop() {
-          renderFrame();
-          requestAnimationFrame(loop);
-        }
-
-        // 시작
-        callMain(commonArgs);
-        requestAnimationFrame(loop);
-      }
 
       window.onerror = function (event) { console.error("Unhandled error:", event); };
     </script>

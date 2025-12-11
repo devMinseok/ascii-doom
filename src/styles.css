@@ -85,6 +85,11 @@ canvas.frame {
   font-family: inherit;
   border-radius: 2px;
 }
+.control-button--engine {
+  color: #0f0;
+  border: 1px solid #0f0;
+  margin-right: 8px;
+}
 .control-button--simd {
   color: #0f0;
   border: 1px solid #0f0;
