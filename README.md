@@ -51,8 +51,9 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
 
    | 시나리오 | FPS | Latency Avg | Latency Min | Latency Max | 환경 |
    |----------|-----|-------------|-------------|-------------|------|
-   | SIMD ON  | 35.00 | 0.45 ms | 0.00 ms | 1.20 ms | MacBook Pro M3 Pro / Chrome |
-   | SIMD OFF | 34.96 | 0.47 ms | 0.10 ms | 1.40 ms | MacBook Pro M3 Pro / Chrome |
+   | SIMD ON  | 35.00 | 0.45 ms | 0.00 ms | 1.20 ms | MacOS / Apple M3 Pro / 36GB RAM / Chrome |
+   | SIMD OFF | 34.96 | 0.47 ms | 0.10 ms | 1.40 ms | MacOS / Apple M3 Pro / 36GB RAM / Chrome |
+   | JS Mode  | 27.32 | 0.56 ms | 0.40 ms | 1.10 ms | MacOS / Apple M3 Pro / 36GB RAM / Chrome |
 
 
 
