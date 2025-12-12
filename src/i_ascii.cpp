@@ -32,6 +32,12 @@ static bool use_simd = true;
 // 벤치마크 모드
 static bool benchmark_mode = false;
 
+// JS 모드 (JS에서 ASCII 변환 수행)
+static bool js_mode = false;
+static const uint32_t* rgba_buffer_ptr = nullptr;
+static int rgba_buffer_width = 0;
+static int rgba_buffer_height = 0;
+
 // 벤치마크 통계 구조체
 struct BenchmarkStats {
     uint32_t frame_count;
@@ -245,6 +251,16 @@ void I_ConvertRGBAtoASCII(const uint32_t *rgba_buffer,
     AsciiCell* out = (AsciiCell*)output_buffer;
     if (!rgba_buffer || src_width<=0 || src_height<=0 ||
         ascii_width<=0 || ascii_height<=0) return;
+
+    // RGBA 버퍼 포인터 저장 (JS 모드에서 사용)
+    rgba_buffer_ptr = rgba_buffer;
+    rgba_buffer_width = src_width;
+    rgba_buffer_height = src_height;
+
+    // JS 모드일 때는 C++ 변환 스킵 (JS에서 처리)
+    if (js_mode) {
+        return;
+    }
 
     // 초기화 작업 (벤치마크에서 제외)
     init_luts_once();
@@ -526,6 +542,37 @@ EMSCRIPTEN_KEEPALIVE
 double ascii_get_current_fps_simd_on(void) { return current_fps_simd_on; }
 EMSCRIPTEN_KEEPALIVE
 double ascii_get_current_fps_simd_off(void) { return current_fps_simd_off; }
+
+// JS 모드 관련 exports
+EMSCRIPTEN_KEEPALIVE
+void ascii_set_js_mode(int enabled) {
+    js_mode = (enabled != 0);
+}
+
+EMSCRIPTEN_KEEPALIVE
+int ascii_get_js_mode(void) {
+    return js_mode ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint32_t* ascii_get_rgba_buffer(void) {
+    return rgba_buffer_ptr;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int ascii_get_rgba_buffer_size(void) {
+    return rgba_buffer_width * rgba_buffer_height * sizeof(uint32_t);
+}
+
+EMSCRIPTEN_KEEPALIVE
+int ascii_get_rgba_width(void) {
+    return rgba_buffer_width;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int ascii_get_rgba_height(void) {
+    return rgba_buffer_height;
+}
 
 } // extern "C"
 
