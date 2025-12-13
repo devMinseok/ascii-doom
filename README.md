@@ -34,9 +34,16 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
    - 김철준: 아스키 그래픽 변환 로직 설계
 
 5. 개발 중 어려웠던 점과 해결 방법  
-   - 팔레트/감마: 원본 팔레트와 ASCII 밝기 스케일이 달라 어둡게 보임 → 감마 LUT(0.35)와 밝기→문자 LUT(idxLUT) 재조정.  
-   - 해상도 스케일링: 셀 단위 다운샘플 시 계단/깨짐 → 적분영상 + 박스필터 평균으로 셀 컬러 추출.  
-   - 메모리/성능: 프레임마다 동적 할당이 있어 힙 성장 → 프리할로케이션 버퍼(temp_r/g/b 등)와 역수 LUT로 나눗셈 제거.  
+      - WASM 포팅 & SDL 렌더링 흐름 파악  
+        - Doom이 `screens[]` 프레임버퍼를 SDL로 넘기고, Emscripten이 이를 `<canvas>`에 매핑하는 전 과정을 따라가야 원시 RGBA 데이터를 확보할 수 있었다.  
+        - JS에서 WebAssembly 메모리를 읽을 때 heap view가 언제 무효화되는지까지 이해해야 안정적으로 훅을 걸 수 있어, SDL 경로와 소프트웨어 렌더링 경로를 분리 조사하고 직접 프레임버퍼 hook을 구현했다.  
+
+      - ASCII 변환 파이프라인 설계  
+        - 엔진은 320×200 RGBA 프레임을 내보내지만 목표 출력은 240×80 문자 격자로, 매 프레임 `Raw RGBA → 다운샘플 → 셀 평균 → 밝기/문자 결정 → 색상 보정`을 수행해야 했다.  
+        - 셀마다 픽셀을 순회하는 방식은 너무 느려서 Summed Area Table(적분영상)과 역수 LUT로 평균을 O(1)에 계산하고, SIMD 가능한 구간에 WASM SIMD128을 적용해 네 셀씩 동시에 밝기를 산출하도록 구조화했다.  
+        - 덕분에 “문자 기반 렌더링을 게임 엔진 프레임레이트로 유지하려면?”이라는 숙제를 알고리즘+저수준 최적화 조합으로 풀 수 있었다.  
+
+
 
 6. 가산점 항목으로 생각하는 부분
    - **SIMD 최적화 시도**: WASM SIMD128 인트린식을 사용하여 픽셀 처리 파이프라인 병렬화.
@@ -47,7 +54,6 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
      - WASM이 네이티브에 준하는 성능을 내고 있음을 확인하는 대조군으로 활용.
 
 7. Latency 측정 테이블  
-   
    > **측정 기준**: RGBA 버퍼 입력 시점부터 ASCII 버퍼 출력 완료 시점까지의 **순수 알고리즘 연산 시간**  
    > - **C++**: `I_ConvertRGBAtoASCII` (적분영상 생성 → 2-Pass 변환(SIMD 최적화 구조))  
    > - **JavaScript**: `convertRGBAtoASCII_JS` (적분영상 생성 → 1-Pass 변환)  
@@ -59,42 +65,32 @@ Doom 게임을 웹에서 ASCII 아트로 즐길 수 있습니다.
    | C++ SIMD OFF | 34.96 | 0.47 ms | 0.10 ms | 1.40 ms | MacOS / Apple M3 Pro / 36GB RAM / Chrome |
    | JavaScript  | 27.32 | 0.56 ms | 0.40 ms | 1.10 ms | MacOS / Apple M3 Pro / 36GB RAM / Chrome |
 
-
-
-## 🎮 특징
-
-- 🌐 **브라우저에서 바로 실행**: 별도 설치 없이 웹 브라우저에서 바로 플레이
-- 🎨 **ASCII 아트 렌더링**: 터미널 스타일의 고유한 비주얼 경험
-- 📦 **WebAssembly 기반**: 네이티브에 가까운 성능으로 실행
-- 🚀 **자동 배포**: GitHub Actions를 통한 CI/CD 파이프라인
-- 🐳 **Docker 기반 빌드**: 일관된 빌드 환경 제공
-
-
-## 🛠️ 기술 스택
-
-### 핵심 기술
-
-- **[Emscripten](https://emscripten.org/)**: C/C++ 코드를 WebAssembly와 JavaScript로 컴파일
-- **[WebAssembly (WASM)](https://webassembly.org/)**: 고성능 바이너리 포맷으로 네이티브에 가까운 성능 제공
-- **[SDL2](https://www.libsdl.org/)**: 크로스 플랫폼 멀티미디어 라이브러리 (입력, 오디오, 네트워킹)
-- **[Chocolate Doom](https://www.chocolate-doom.org/)**: 정확한 Doom 소스 포트
-
-### 빌드 도구
-
-- **Autotools** (autoconf, automake): 빌드 시스템 자동화
-- **Docker**: 일관된 빌드 환경 제공
-- **GitHub Actions**: 자동 빌드 및 배포
-
-### Emscripten 기능
-
-- `ASYNCIFY`: 동기 C 코드를 비동기 JavaScript로 변환
-- `ALLOW_MEMORY_GROWTH`: 동적 메모리 할당 지원
-- `FORCE_FILESYSTEM`: Emscripten 가상 파일 시스템으로 WAD 파일 로드
-- `USE_SDL=2`: SDL2 바인딩을 통한 브라우저 API 접근
-- `EXPORTED_RUNTIME_METHODS`: JavaScript에서 WebAssembly 함수 호출을 위한 런타임 메서드 노출
-- **WASM SIMD**: ASCII 렌더링 성능 최적화를 위한 SIMD 명령어 사용 (`i_ascii.cpp`)
-
 ## ⚙️ 동작 방식
+
+### 아키텍처
+
+```mermaid
+flowchart TB
+  subgraph browser["Web Browser"]
+    ui["HTML / JS<br/>UI & Controls"]
+    canvas["Canvas / Audio / Inputs<br/>(브라우저 API)"]
+  end
+
+  subgraph wasm["WASM (Emscripten)"]
+    logic["게임 로직 (C)<br/>Chocolate Doom"]
+    ascii["ASCII 렌더링 엔진 (C++)<br/>i_ascii.cpp · 픽셀→문자 매핑"]
+    sdl["SDL2 포팅 레이어<br/>브라우저 API 브릿지"]
+    fs["Emscripten FS<br/>WAD / Saves (IndexedDB 백엔드)"]
+  end
+
+  ui <--> logic
+  logic --> ascii
+  ascii --> sdl
+  logic --> sdl
+  sdl <--> canvas
+  logic <--> fs
+  ascii --> fs
+```
 
 ### 빌드 프로세스
 
@@ -125,31 +121,6 @@ WebAssembly (.wasm) + JavaScript (.js) + HTML (.html)
    - ASCII 아트 렌더링 엔진이 게임 화면을 터미널 스타일로 변환
    - Canvas API를 통해 브라우저에 렌더링
 
-### 아키텍처
-
-```mermaid
-flowchart TB
-  subgraph browser["Web Browser"]
-    ui["HTML / JS<br/>UI & Controls"]
-    canvas["Canvas / Audio / Inputs<br/>(브라우저 API)"]
-  end
-
-  subgraph wasm["WASM (Emscripten)"]
-    logic["게임 로직 (C)<br/>Chocolate Doom"]
-    ascii["ASCII 렌더링 엔진 (C++)<br/>i_ascii.cpp · 픽셀→문자 매핑"]
-    sdl["SDL2 포팅 레이어<br/>브라우저 API 브릿지"]
-    fs["Emscripten FS<br/>WAD / Saves (IndexedDB 백엔드)"]
-  end
-
-  ui <--> logic
-  logic --> ascii
-  ascii --> sdl
-  logic --> sdl
-  sdl <--> canvas
-  logic <--> fs
-  ascii --> fs
-```
-
 ### ASCII 그래픽 변환 흐름
 
 ```text
@@ -171,6 +142,30 @@ SDL Framebuffer (RGBA32) 입력
       ↓
 JS가 HEAPU8 버퍼를 읽어 Canvas `fillText`로 렌더
 ```
+
+## 🛠️ 기술 스택
+
+### 핵심 기술
+
+- **[Emscripten](https://emscripten.org/)**: C/C++ 코드를 WebAssembly와 JavaScript로 컴파일
+- **[WebAssembly (WASM)](https://webassembly.org/)**: 고성능 바이너리 포맷으로 네이티브에 가까운 성능 제공
+- **[SDL2](https://www.libsdl.org/)**: 크로스 플랫폼 멀티미디어 라이브러리 (입력, 오디오, 네트워킹)
+- **[Chocolate Doom](https://www.chocolate-doom.org/)**: 정확한 Doom 소스 포트
+
+### 빌드 도구
+
+- **Autotools** (autoconf, automake): 빌드 시스템 자동화
+- **Docker**: 일관된 빌드 환경 제공
+- **GitHub Actions**: 자동 빌드 및 배포
+
+### Emscripten 기능
+
+- `ASYNCIFY`: 동기 C 코드를 비동기 JavaScript로 변환
+- `ALLOW_MEMORY_GROWTH`: 동적 메모리 할당 지원
+- `FORCE_FILESYSTEM`: Emscripten 가상 파일 시스템으로 WAD 파일 로드
+- `USE_SDL=2`: SDL2 바인딩을 통한 브라우저 API 접근
+- `EXPORTED_RUNTIME_METHODS`: JavaScript에서 WebAssembly 함수 호출을 위한 런타임 메서드 노출
+- **WASM SIMD**: ASCII 렌더링 성능 최적화를 위한 SIMD 명령어 사용 (`i_ascii.cpp`)
 
 ## 📋 Prerequisites
 
@@ -230,6 +225,14 @@ python3 -m http.server 8000
 ```
 
 브라우저에서 `http://localhost:8000` 열기
+
+## 🎮 특징
+
+- 🌐 **브라우저에서 바로 실행**: 별도 설치 없이 웹 브라우저에서 바로 플레이
+- 🎨 **ASCII 아트 렌더링**: 터미널 스타일의 고유한 비주얼 경험
+- 📦 **WebAssembly 기반**: 네이티브에 가까운 성능으로 실행
+- 🚀 **자동 배포**: GitHub Actions를 통한 CI/CD 파이프라인
+- 🐳 **Docker 기반 빌드**: 일관된 빌드 환경 제공
 
 ## 📚 참고 자료
 
